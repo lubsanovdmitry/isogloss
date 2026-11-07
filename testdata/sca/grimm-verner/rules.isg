@@ -1,0 +1,31 @@
+# PIE → Proto-Germanic: Grimm's law, Verner's law, initial stress.
+# Inputs are simplified PIE in IPA (no laryngeals); accent marked with ˈ.
+
+# Grimm 1: voiceless stops become fricatives, except after an obstruent (*st, *kt)
+rule grimm-fricativization:
+    p t k kʷ => f θ x xʷ
+    except / [-son -syl] _
+
+# Grimm 2: plain voiced stops devoice
+rule grimm-devoicing:
+    b d ɡ ɡʷ => p t k kʷ
+
+# Grimm 3: voiced aspirates lose aspiration
+rule grimm-deaspiration:
+    bʰ dʰ ɡʰ ɡʷʰ => b d ɡ ɡʷ
+
+# Verner: voiceless fricatives voice after an unaccented vowel (optionally
+# with a sonorant between), in a voiced environment or word-finally
+rule verner:
+    [-son +cont -voice] => [+voice] / [+syl stress:0] ([+son -syl]) _ [+voice], [+syl stress:0] ([+son -syl]) _ #
+
+# Germanic fixes stress on the first syllable
+rule initial-stress:
+    [+syl] => [stress:0]
+    [+syl] => [stress:1] / # C* _
+
+rule long-a-rounding:
+    aː => oː
+
+rule o-lowering:
+    o ə => a a

@@ -1,0 +1,29 @@
+# Latin → Spanish (selected changes). Classical vowel length is written with ː.
+
+class stop = [-son -cont -delrel]
+
+rule final-m-loss:
+    m => * / _ #
+
+# Western Romance vowel system: length becomes quality
+rule vowel-quality:
+    iː i eː e aː oː o uː u => i e e ɛ a o ɔ u o
+
+# -ct- becomes -ch- (via a yod, which blocks diphthongization)
+rule ct-palatalization:
+    kt => t͡ʃ
+
+rule diphthongization:
+    [ɛ stress:1] => je
+    except / _ t͡ʃ
+    [ɔ stress:1] => we
+    except / _ t͡ʃ
+
+rule mid-vowel-merger:
+    ɛ ɔ => e o
+
+rule intervocalic-lenition:
+    [stop -voice] => [+voice] / V _ V, V _ r
+
+rule w-fortition:
+    w => b / # _

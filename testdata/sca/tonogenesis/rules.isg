@@ -1,0 +1,17 @@
+# Toy tonogenesis: final ʔ → rising tone, final h → falling tone;
+# voiced onsets → breathy register → low tone, with onset devoicing.
+
+rule voiced-onset-breathy:
+    [+syl] => [phon:breathy] / [-son +voice] _
+
+rule onset-devoicing:
+    [-son +voice] => [-voice] / _ [+syl phon:breathy]
+
+rule tono-rise:
+    [+syl] ʔ => [tone:rise] * / _ #
+
+rule tono-fall:
+    [+syl] h => [tone:fall] * / _ #
+
+rule register-to-tone:
+    [+syl phon:breathy] => [tone:L phon:modal]

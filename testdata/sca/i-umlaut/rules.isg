@@ -1,0 +1,14 @@
+# Proto-West-Germanic → Old English: i-umlaut of long back vowels, loss of
+# final -z, apocope of -i after a heavy syllable, unrounding of ø.
+
+rule final-z-loss:
+    z => * / _ #
+
+rule i-umlaut:
+    [+syl +back -low] => [-back +front] / _ C* [+syl +high +front]
+
+rule apocope-after-heavy:
+    i => * / [+syl +long] C _ #
+
+rule o-umlaut-unrounding:
+    ø øː => e eː

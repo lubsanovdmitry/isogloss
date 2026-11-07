@@ -1,0 +1,4 @@
+# Proto-Slavic first palatalization of velars before front vowels and j.
+
+rule first-palatalization:
+    k ɡ x => t͡ʃ ʒ ʃ / _ [+syl +front], _ j
