@@ -1,25 +1,69 @@
 <script lang="ts">
-  import type { Engine, Table } from './engine';
+  import type { Corresp, Engine, Table } from './engine';
   import { cogTint } from './palette';
 
   interface Props { engine: Engine; tick: number; onpick: (concept: string) => void }
   let { engine, tick, onpick }: Props = $props();
   let table = $state<Table | null>(null);
+  let corr = $state<Corresp | null>(null);
   let filter = $state('');
+  let mode = $state<'words' | 'corr'>('words');
 
   $effect(() => {
     void tick;
-    engine.query<Table>('compare', { core: true }).then((t) => (table = t));
+    if (mode === 'words') engine.query<Table>('compare', { core: true }).then((t) => (table = t));
+    else engine.query<Corresp>('corresp', { min: 2 }).then((c) => (corr = c));
+  });
+  // Correspondence sets grouped by proto-segment (the engine sends them grouped).
+  const groups = $derived.by(() => {
+    const out: { proto: string; sets: Corresp['sets'] }[] = [];
+    for (const s of corr?.sets ?? []) {
+      if (!out.length || out[out.length - 1].proto !== s.proto) out.push({ proto: s.proto, sets: [] });
+      out[out.length - 1].sets.push(s);
+    }
+    return out;
   });
   const rows = $derived(table ? table.rows.filter((r) => r.concept.includes(filter.trim().toLowerCase())) : []);
 </script>
 
 <div class="bar">
-  <label for="tfilter">Find concept</label>
-  <input id="tfilter" bind:value={filter} placeholder="e.g. water" />
-  <span class="note">Shaded cells use a new root; the same shade in a row marks cognates.</span>
+  <div class="seg" role="group" aria-label="Table">
+    <button aria-pressed={mode === 'words'} onclick={() => (mode = 'words')}>Cognates</button>
+    <button aria-pressed={mode === 'corr'} onclick={() => (mode = 'corr')}>Sound correspondences</button>
+  </div>
+  {#if mode === 'words'}
+    <label for="tfilter">Find concept</label>
+    <input id="tfilter" bind:value={filter} placeholder="e.g. water" />
+    <span class="note">Shaded cells use a new root; the same shade in a row marks cognates.</span>
+  {:else}
+    <span class="note">Each row is a proto-sound and what it became in every language, counted over core words all of them inherited. Recurring sets are regular sound laws; a sound with several rows split by context.</span>
+  {/if}
 </div>
-{#if table}
+{#if mode === 'corr'}
+  {#if corr && groups.length}
+    <div class="wrap">
+      <table>
+        <thead>
+          <tr><th scope="col" class="proto">{corr.proto}</th>{#each corr.langs as l, i (i)}<th scope="col">{l}</th>{/each}<th scope="col">Sets</th><th scope="col">e.g.</th></tr>
+        </thead>
+        <tbody>
+          {#each groups as g (g.proto)}
+            {#each g.sets as c, k (k)}
+              <tr class:first={k === 0}>
+                <th scope="row" class="ipa">{k === 0 ? '*' + c.proto : ''}</th>
+                {#each c.reflexes as r, i (i)}<td class="ipa" class:same={r === c.proto} class:lost={r === '∅'}>{r}</td>{/each}
+                <td class="num">{c.count}</td>
+                <td class="ex">{c.examples.join(', ')}</td>
+              </tr>
+            {/each}
+          {/each}
+        </tbody>
+      </table>
+    </div>
+  {:else if corr}
+    <p class="note">Not enough words are still shared by every language to find regular correspondences.</p>
+  {/if}
+{:else if table}
   <div class="wrap">
     <table>
       <thead>
@@ -50,6 +94,16 @@
   thead th.proto { font-style: italic; font-weight: 400; }
   tbody th { position: sticky; left: 0; background: var(--paper); font-weight: 500; }
   td.ipa { font-size: var(--t-md); }
+  .seg { display: inline-flex; }
+  .seg button { border-radius: 0; }
+  .seg button:first-child { border-radius: 3px 0 0 3px; }
+  .seg button:last-child { border-radius: 0 3px 3px 0; margin-left: -1px; }
+  .seg button[aria-pressed='true'] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  td.same { color: var(--ink-soft); }
+  td.lost { color: var(--isogloss); }
+  td.num { font-variant-numeric: tabular-nums; text-align: right; color: var(--ink-soft); }
+  td.ex { color: var(--ink-soft); font-size: var(--t-xs); }
+  tr.first > * { border-top: 1px solid var(--rule); }
   .link { background: none; border: none; padding: 0; cursor: pointer; }
   .link:hover { text-decoration: underline; }
 </style>

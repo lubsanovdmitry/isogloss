@@ -53,6 +53,15 @@ type Innovation struct {
 	Rate     int32 // local logistic growth rate, signed Q16
 	Life     int32 // ticks during which the innovation actively spreads
 	Forced   bool
+	// Curve records adoption at the end of each tick while the innovation
+	// is live; Curve[0] is tick Tick (the tick it was proposed).
+	Curve []Adoption
+}
+
+// Adoption is how far an innovation has got at one tick: communities that
+// applied it, and communities where it is present at any level.
+type Adoption struct {
+	Applied, Reached uint16
 }
 
 // Label is a short human description.

@@ -8,15 +8,15 @@ needed.
 
 - [ ] Push to a remote and confirm CI is green on all three jobs. The arm64 golden digest has not run yet: only amd64 and wasm have been checked locally.
 - [ ] Set the real Go module path (it is the placeholder `isogloss`; needs the GitHub owner).
-- [ ] List regular sound correspondences in the comparative table (spec: "regular correspondences listed").
-- [ ] Isogloss overlay: optionally show the live wave level (`InnovJSON` already returns `level`), and adoption over time (the spec's "Isogloss / wave" view).
-- [ ] Intelligibility heatmap view (pairwise matrix of living languages; `Clusterer.Intel` exists).
+- [x] List regular sound correspondences in the comparative table (Word lists → Sound correspondences; `render.Correspondences`).
+- [x] Isogloss overlay shows the live wave level, plus an adoption-over-time chart (`Innovation.Curve`).
+- [x] Intelligibility heatmap view (Intelligibility tab; `render.IntelJSON`).
 - [ ] Timeline: snapshots every N ticks for fast scrubbing. Today "look back" shows language maps only, and forking replays from tick 0.
 - [ ] Concept frequency classes/stability are hand-curated for ~120 concepts; the rest use defaults. Review `cmd/datagen/concepts_meta.tsv`.
-- [ ] Compounding picks heads and modifiers loosely (e.g. 'night' = 'straight'+'year'); constrain by CLICS/field until M3 drift lands.
-- [ ] Install binaryen and enable `wasm-opt -Oz` (bundle is 0.9 MB gz without it).
+- [x] Compounds: only things are compounded; heads are CLICS neighbours (else same field), modifiers a small classifier set.
+- [x] `wasm-opt -Oz` (binaryen 117 from emsdk) saves only 0.5% gzipped on the Go bundle; not worth a dependency. The Makefile still uses it when it is on PATH.
 - [ ] Watch `npm audit`: low-severity `deepmerge` advisory via `@sveltejs/vite-plugin-svelte` (dev-only, no fix upstream yet).
-- [ ] Tune calibration knobs across many seeds (target ~80% core retention per millennium; 4–12 languages). Add a seed-sweep test that reports distributions.
+- [x] Seed sweep (`TestSeedSweep`, 16 seeds): median 5 languages (2–10), median core retention 787‰. Knobs left as they were.
 
 ## M2 · Grammar
 

@@ -258,6 +258,9 @@ func (s *Sim) coin(r *rng.Stream, c *pop.Community, con lex.ConceptID) *history.
 	if cs[con].Taboo {
 		wComp, wRoot = 70, 5
 	}
+	if cs[con].Category != "Person/Thing" {
+		wComp = 0 // only things are named by compounds
+	}
 	switch r.Weighted([]uint32{wShift, wComp, wRoot}) {
 	case 0:
 		ew := make([]uint32, len(edges))
@@ -271,28 +274,10 @@ func (s *Sim) coin(r *rng.Stream, c *pop.Community, con lex.ConceptID) *history.
 		}
 		return &history.LexChange{Concept: con, Form: src.Form.Clone(), Freq: cur.Freq, Etym: src.Etym, How: "shift from '" + cs[e.To].Label + "'"}
 	case 1:
-		// Head: a related concept (CLICS neighbour or same field); modifier:
-		// a property word ("the brown one" for taboo animals).
-		var heads, mods []lex.ConceptID
-		for _, e := range edges {
-			heads = append(heads, e.To)
-		}
-		for _, x := range cs {
-			if x.ID == con {
-				continue
-			}
-			if x.Field == cs[con].Field && x.Category == cs[con].Category {
-				heads = append(heads, x.ID)
-			}
-			if x.Category == "Property" {
-				mods = append(mods, x.ID)
-			}
-		}
-		if len(heads) == 0 || len(mods) == 0 {
+		h, m, ok := compoundParts(r, con)
+		if !ok {
 			return nil
 		}
-		h := heads[r.IntN(len(heads))]
-		m := mods[r.IntN(len(mods))]
 		hw, mw := v.Lex.At(h).Form, v.Lex.At(m).Form
 		if len(hw.Segs)+len(mw.Segs) > 10 {
 			return nil
@@ -318,4 +303,56 @@ func (s *Sim) newRoot(origin int32, how string) lex.EtymID {
 	s.nextRoot++
 	s.Roots = append(s.Roots, history.Root{ID: id, Tick: s.Tick, Origin: origin, How: how})
 	return id
+}
+
+// Modifiers that commonly classify things in compounds ("blackbird",
+// "big-river"); taboo animals favour descriptions ("the brown one", "the
+// old one").
+var (
+	classifiers = []string{"big", "small", "old", "new", "good", "bad", "black", "white", "red", "long", "round", "sharp"}
+	euphemisms  = []string{"old", "big", "black", "yellow", "good"}
+)
+
+// compoundParts picks a head and a modifier for a compound naming con. Only
+// things are compounded. The head is a colexified neighbour (weighted by how
+// many families colexify them), or failing that a thing from the same
+// semantic field; the modifier is a classifying property.
+func compoundParts(r *rng.Stream, con lex.ConceptID) (head, mod lex.ConceptID, ok bool) {
+	cs := lex.Concepts()
+	if cs[con].Category != "Person/Thing" {
+		return 0, 0, false
+	}
+	var heads []lex.ConceptID
+	var hw []uint32
+	for _, e := range lex.Colex(con) {
+		if cs[e.To].Category == "Person/Thing" {
+			heads = append(heads, e.To)
+			hw = append(hw, uint32(e.Families))
+		}
+	}
+	if len(heads) == 0 {
+		for _, x := range cs {
+			if x.ID != con && x.Field == cs[con].Field && x.Category == "Person/Thing" {
+				heads = append(heads, x.ID)
+				hw = append(hw, 1)
+			}
+		}
+	}
+	if len(heads) == 0 {
+		return 0, 0, false
+	}
+	names := classifiers
+	if cs[con].Taboo {
+		names = euphemisms
+	}
+	var mods []lex.ConceptID
+	for _, n := range names {
+		if id, found := lex.ConceptByLabel(n); found && id != con {
+			mods = append(mods, id)
+		}
+	}
+	if len(mods) == 0 {
+		return 0, 0, false
+	}
+	return heads[r.Weighted(hw)], mods[r.IntN(len(mods))], true
 }

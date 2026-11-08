@@ -51,20 +51,7 @@ func soundCount(s *Sim, v *lex.Variety) int {
 	return n
 }
 
-// retention: share of core concepts still expressed by the proto root.
-func retention(s *Sim, v *lex.Variety) int {
-	kept, n := 0, 0
-	for _, c := range lex.Concepts() {
-		if !c.Core() {
-			continue
-		}
-		n++
-		if v.Lex.At(c.ID).Etym == lex.ProtoRoot(c.ID) {
-			kept++
-		}
-	}
-	return kept * 100 / n
-}
+func retention(_ *Sim, v *lex.Variety) int { return Retention(v) / 10 }
 
 func TestDeterministic(t *testing.T) {
 	a := New(7, DefaultConfig())
@@ -103,5 +90,41 @@ func BenchmarkRun40(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		s := New(42, DefaultConfig())
 		s.Run(40)
+	}
+}
+
+// TestSeedSweep checks calibration across seeds: after 1000 years most runs
+// should have several languages and keep roughly 80% of core vocabulary.
+func TestSeedSweep(t *testing.T) {
+	if testing.Short() {
+		t.Skip("slow")
+	}
+	const n = 16
+	stats := make([]Stats, n)
+	done := make(chan int)
+	for i := 0; i < n; i++ {
+		go func(i int) {
+			s := New(uint64(1000+i), DefaultConfig())
+			s.Run(40)
+			stats[i] = s.Summarise()
+			done <- i
+		}(i)
+	}
+	for i := 0; i < n; i++ {
+		<-done
+	}
+	var langs, ret []int
+	for _, st := range stats {
+		t.Logf("seed %d: %2d languages, %3d communities, retention %v‰, sound changes %v", st.Seed, st.Languages, st.Communities, st.Retention, st.Sounds)
+		langs = append(langs, st.Languages)
+		ret = append(ret, st.Retention[1])
+	}
+	l, r := spread3(langs), spread3(ret)
+	t.Logf("languages min/median/max %v; median retention %v‰", l, r)
+	if l[1] < 3 || l[1] > 14 {
+		t.Errorf("median language count %d outside 3..14", l[1])
+	}
+	if r[1] < 650 || r[1] > 900 {
+		t.Errorf("median retention %d‰ outside 650..900", r[1])
 	}
 }

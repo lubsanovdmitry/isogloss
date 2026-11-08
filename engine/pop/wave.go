@@ -85,3 +85,14 @@ func (w *Wave) Count() int {
 	}
 	return n
 }
+
+// Reach returns how many hexes hold the innovation at any level or applied it.
+func (w *Wave) Reach() int {
+	n := 0
+	for i, a := range w.Level {
+		if a > 0 || w.Applied[i] {
+			n++
+		}
+	}
+	return n
+}

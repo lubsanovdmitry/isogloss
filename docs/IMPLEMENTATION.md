@@ -43,12 +43,12 @@ Decisions made while building M0–M1 that refine or depart from the spec.
 Sound-change proposal rate 60‰ per community per generation; word-replacement
 rates by stability class (8–240 per 100k community-generations, scaled ×0.8);
 innovations start at 0.2 adoption with a local growth rate in −0.25…0.75 and
-spread for 5–15 generations. With these, seed 42 ends with 8 languages after
-1000 years and core-vocabulary retention of 62–86%. Real-world retention is
-~80% per millennium.
+spread for 5–15 generations. Across 16 seeds (`TestSeedSweep`) 1000 years give
+a median of 5 languages (2–10) and median core retention of 787‰; real-world
+retention is ~80% per millennium.
 
 ## Known gaps in M1
 
-- Regular sound correspondences are not yet listed in the comparative table.
-- The isogloss overlay shows where a change was adopted, not the live wave.
 - Homophony clashes do not yet trigger replacement (M3).
+- Regular correspondences are counted over core words that *every* living
+  language inherited; with many languages that set gets small.

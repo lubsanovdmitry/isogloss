@@ -41,6 +41,7 @@ func TestViews(t *testing.T) {
 	valid(t, "lang", LangJSON(s, s.LivingLanguages()[0].ID))
 	valid(t, "innovs", InnovListJSON(s, 3))
 	valid(t, "innov", InnovJSON(s, 1))
+	valid(t, "intel", IntelJSON(s))
 	valid(t, "preview", PreviewJSON(s, s.Communities()[0].Hex, "rule x:\n    a => e\n"))
 	valid(t, "preview-error", PreviewJSON(s, 0, "rule x:\n    a => [+nope]\n"))
 	w, _ := lex.ConceptByLabel("water")
@@ -59,4 +60,31 @@ func TestViews(t *testing.T) {
 		t.Error("newick")
 	}
 	t.Log(files["tree.nwk"])
+}
+
+func TestCorrespondences(t *testing.T) {
+	s := sim.New(42, sim.DefaultConfig())
+	s.Run(40)
+	langs, cs := Correspondences(s, 2)
+	if len(cs) < 10 {
+		t.Fatalf("only %d correspondence sets", len(cs))
+	}
+	// Some correspondences must show change (otherwise nothing happened).
+	changed := 0
+	for _, c := range cs {
+		for _, r := range c.Reflexes {
+			if r != c.Proto {
+				changed++
+				break
+			}
+		}
+	}
+	if changed == 0 {
+		t.Error("no correspondence shows a sound change")
+	}
+	valid(t, "corresp", CorrespondencesJSON(s, 2))
+	for _, c := range cs[:min(len(cs), 12)] {
+		t.Logf("*%s : %v  ×%d  %v", c.Proto, c.Reflexes, c.Count, c.Examples)
+	}
+	t.Log(langs)
 }

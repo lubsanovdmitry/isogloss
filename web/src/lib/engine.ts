@@ -16,7 +16,8 @@ export interface Sketch {
   lang: Lang; vowels: string[]; consonants: string[]; template: string; stress: string; repair: string;
   changes: { tick: number; innov?: number; label: string; rule?: string }[]; replacements: number;
 }
-export interface InnovInfo { id: number; kind: string; label: string; rule: string; origin: number; tick: number; applied: number[]; level?: number[] }
+export interface InnovInfo { id: number; kind: string; label: string; rule: string; origin: number; tick: number; applied: number[]; curve: [number, number][]; level?: number[] }
+export interface Corresp { proto: string; langs: string[]; sets: { proto: string; count: number; reflexes: string[]; examples: string[] }[] }
 export interface InnovSummary { id: number; label: string; tick: number; origin: number; hexes: number }
 export interface Concept { id: number; label: string; gloss: string; core: boolean; field: string }
 export interface Frame { tick: number; lang: number[] }

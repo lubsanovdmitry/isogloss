@@ -307,6 +307,7 @@ func (s *Sim) spread() {
 		for _, h := range l.wave.Step(s.present, s.contacts, s.prestige, rate, spreading) {
 			crossings = append(crossings, cross{l, h})
 		}
+		l.in.Curve = append(l.in.Curve, history.Adoption{Applied: uint16(l.wave.Count()), Reached: uint16(l.wave.Reach())})
 		l.age++
 	}
 	for _, c := range crossings {
@@ -365,6 +366,12 @@ func (s *Sim) diffuse() {
 		c.Diffusing = kept
 	}
 }
+
+// Intel returns the mutual intelligibility of two varieties (cached).
+func (s *Sim) Intel(a, b *lex.Variety) fx.Q16 { return s.cl.Intel(a, b) }
+
+// Threshold is the intelligibility at which varieties count as one language.
+func (s *Sim) Threshold() fx.Q16 { return s.cl.Thr }
 
 // LiveCount returns how many innovations are still spreading.
 func (s *Sim) LiveCount() int { return len(s.live) }

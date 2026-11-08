@@ -9,7 +9,7 @@
 //	step     {n, since}                  advance n ticks; returns snapshot
 //	snapshot {since}
 //	intervene{rule, hex}                 schedule a rule for the next tick
-//	query    {kind, ...}                 compare | lang | word | innov | innovs | preview | frames | concepts | sketch
+//	query    {kind, ...}                 compare | corresp | intel | lang | word | innov | innovs | preview | frames | concepts
 //	save                                 returns the save (seed, tick, interventions)
 //	load     {save}                      replay a save
 //	fork     {tick}                      replay this run truncated at tick
@@ -187,6 +187,10 @@ func query(q js.Value) string {
 		return string(render.InnovListJSON(cur, num(q, "min", 3)))
 	case "preview":
 		return string(render.PreviewJSON(cur, int32(num(q, "hex", -1)), str(q, "rule")))
+	case "corresp":
+		return string(render.CorrespondencesJSON(cur, num(q, "min", 2)))
+	case "intel":
+		return string(render.IntelJSON(cur))
 	case "frames":
 		return string(render.FramesJSON(cur))
 	case "save":

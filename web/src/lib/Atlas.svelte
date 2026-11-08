@@ -7,9 +7,10 @@
     langOf: Int32Array; // per hex, -1 unsettled
     selected: number;
     isogloss: Set<number> | null; // hexes that adopted the chosen innovation
+    level?: number[] | null; // live wave level per hex (per-mille), if still spreading
     onselect: (hex: number) => void;
   }
-  let { world, langOf, selected, isogloss, onselect }: Props = $props();
+  let { world, langOf, selected, isogloss, level = null, onselect }: Props = $props();
 
   const R = 14; // hex radius
   const W = Math.sqrt(3) * R;
@@ -102,6 +103,12 @@
   tabindex="0"
   onkeydown={key}
 >
+  <defs>
+    <pattern id="hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="5" height="5" fill="var(--isogloss)" opacity="0.35" />
+      <line x1="0" y1="0" x2="0" y2="5" stroke="var(--isogloss)" stroke-width="2" />
+    </pattern>
+  </defs>
   {#each world.hexes as h (h.id)}
     <polygon
       points={polys[h.id]}
@@ -112,6 +119,13 @@
       role="presentation"
     />
   {/each}
+  {#if level}
+    {#each world.hexes as h (h.id)}
+      {#if level[h.id] > 0 && langOf[h.id] >= 0}
+        <polygon points={polys[h.id]} class="wave" class:done={isogloss?.has(h.id)} style:opacity={isogloss?.has(h.id) ? 0.35 : 0.15 + 0.6 * (level[h.id] / 1000)} />
+      {/if}
+    {/each}
+  {/if}
   <path d={rivers} class="river" />
   <path d={coast} class="coast" />
   <path d={borders} class="border" />
@@ -131,5 +145,7 @@
   .coast { stroke: var(--rule); stroke-width: 1; fill: none; }
   .border { stroke: var(--ink); stroke-width: 1.6; fill: none; stroke-linecap: round; }
   .iso { stroke: var(--isogloss); stroke-width: 3; fill: none; stroke-linecap: round; }
+  .wave { fill: var(--isogloss); pointer-events: none; }
+  .wave.done { fill: url(#hatch); }
   .sel { fill: none; stroke: var(--ink); stroke-width: 2.5; pointer-events: none; }
 </style>

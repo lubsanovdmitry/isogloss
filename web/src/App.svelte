@@ -8,6 +8,8 @@
   import LangPanel from './lib/LangPanel.svelte';
   import RulePanel from './lib/RulePanel.svelte';
   import Chronicle from './lib/Chronicle.svelte';
+  import IntelPanel from './lib/IntelPanel.svelte';
+  import WaveChart from './lib/WaveChart.svelte';
 
   const engine = new Engine();
   const YEARS = 25;
@@ -19,7 +21,7 @@
   let seed = $state('42');
   let selected = $state(-1);
   let concept = $state('water');
-  let tab = $state<'tree' | 'word' | 'table' | 'lang' | 'rules' | 'log'>('tree');
+  let tab = $state<'tree' | 'word' | 'table' | 'intel' | 'lang' | 'rules' | 'log'>('tree');
   let running = $state(false);
   let speed = $state(2); // ticks per second
   let busy = $state(false);
@@ -166,7 +168,7 @@
   });
 
   const tabs = [
-    ['tree', 'Family tree'], ['word', 'Word history'], ['table', 'Word lists'],
+    ['tree', 'Family tree'], ['word', 'Word history'], ['table', 'Word lists'], ['intel', 'Intelligibility'],
     ['lang', 'Sound system'], ['rules', 'Change rules'], ['log', 'Chronicle'],
   ] as const;
 </script>
@@ -196,7 +198,7 @@
 <main>
   <section class="atlas" aria-label="Map">
     {#if world}
-      <Atlas {world} {langOf} {selected} isogloss={isoSet} onselect={select} />
+      <Atlas {world} {langOf} {selected} isogloss={isoSet} level={!viewing ? overlay?.level : null} onselect={select} />
       <div class="under">
         <label class="iso">
           Isogloss
@@ -209,7 +211,11 @@
             {#each innovs as i (i.id)}<option value={i.id}>{i.label} (year {i.tick * YEARS}, {i.hexes} communities)</option>{/each}
           </select>
         </label>
-        {#if overlay}<p class="rule ipa">{overlay.rule.split('\n').slice(1).join(' ').trim() || overlay.label}</p>{/if}
+        {#if overlay}
+          <p class="rule ipa">{overlay.rule.split('\n').slice(1).join(' ').trim() || overlay.label}</p>
+          <p class="wavenote">{overlay.level ? 'Still spreading: shading shows how far it has got in each community; hatched hexes have adopted it.' : 'No longer spreading.'}</p>
+          <div class="chartrow"><WaveChart curve={overlay.curve} born={overlay.tick} /></div>
+        {/if}
         {#if frames.length > 1}
           <label class="scrub">
             Look back
@@ -245,6 +251,8 @@
           <WordPanel {engine} hex={selected} tick={snap.tick} {concepts} {concept} onconcept={(c) => (concept = c)} />
         {:else if tab === 'table'}
           <TablePanel {engine} tick={snap.tick} onpick={(c) => { concept = c; tab = 'word'; }} />
+        {:else if tab === 'intel'}
+          <IntelPanel {engine} tick={snap.tick} onlang={(id) => { focusLang = id; tab = 'lang'; }} />
         {:else if tab === 'lang'}
           <LangPanel {engine} lang={shownLang} tick={snap.tick} oninnov={showInnov} />
         {:else if tab === 'rules'}
@@ -297,6 +305,8 @@
   .iso select { max-width: min(22rem, 100%); min-width: 0; }
   .iso { color: var(--isogloss) !important; font-weight: 600; }
   .rule { margin: 0; color: var(--isogloss); flex-basis: 100%; }
+  .chartrow { flex-basis: 100%; }
+  .wavenote { margin: 0; color: var(--ink-soft); flex-basis: 100%; font-size: var(--t-xs); }
   .scrub input { width: 12rem; max-width: 50vw; }
   .loading { color: var(--ink-soft); padding: 3rem 0; }
 

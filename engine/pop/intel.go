@@ -137,3 +137,41 @@ func (m Metric) Intel(a, b *lex.Variety) fx.Q16 {
 	inv := InventorySim(a.Inventory(), b.Inventory())
 	return fx.Q16((uint64(l)*uint64(m.LexWeight) + uint64(inv)*uint64(m.InvWeight)) / 1000)
 }
+
+// Align aligns b to a with the same costs as WordSim and returns, for each
+// segment of a, the index of its partner in b or -1 if it was deleted.
+// Insertions in b are not reported. Ties prefer substitution, then
+// deletion, so the result is deterministic.
+func Align(a, b []phon.Segment) []int {
+	n, m := len(a), len(b)
+	d := make([]int, (n+1)*(m+1))
+	at := func(i, j int) *int { return &d[i*(m+1)+j] }
+	for i := 0; i <= n; i++ {
+		*at(i, 0) = i * unit
+	}
+	for j := 0; j <= m; j++ {
+		*at(0, j) = j * unit
+	}
+	for i := 1; i <= n; i++ {
+		for j := 1; j <= m; j++ {
+			best := *at(i-1, j-1) + substCost(a[i-1], b[j-1])
+			best = min(best, *at(i-1, j)+unit, *at(i, j-1)+unit)
+			*at(i, j) = best
+		}
+	}
+	out := make([]int, n)
+	i, j := n, m
+	for i > 0 {
+		switch {
+		case j > 0 && *at(i, j) == *at(i-1, j-1)+substCost(a[i-1], b[j-1]):
+			out[i-1] = j - 1
+			i, j = i-1, j-1
+		case *at(i, j) == *at(i-1, j)+unit:
+			out[i-1] = -1
+			i--
+		default:
+			j--
+		}
+	}
+	return out
+}

@@ -315,6 +315,11 @@ func InnovJSON(s *sim.Sim, id uint32) []byte {
 		}
 	}
 	j.EndArr()
+	j.K("curve").Arr()
+	for _, a := range in.Curve {
+		j.Arr().I(int64(a.Applied)).I(int64(a.Reached)).EndArr()
+	}
+	j.EndArr()
 	if w := s.Wave(id); w != nil {
 		j.K("level").Arr()
 		for _, a := range w.Level {
@@ -396,5 +401,26 @@ func ConceptsJSON() []byte {
 			KS("field", c.Field).End()
 	}
 	j.EndArr()
+	return j.Bytes()
+}
+
+// IntelJSON is the pairwise intelligibility (per-mille) of living languages,
+// each represented by its centre variety, plus the language threshold.
+func IntelJSON(s *sim.Sim) []byte {
+	ls := s.LivingLanguages()
+	var j JSON
+	j.Obj().KI("threshold", int64(s.Threshold().Permille())).K("langs").Arr()
+	for _, l := range ls {
+		langJSON(&j, l)
+	}
+	j.EndArr().K("m").Arr()
+	for _, a := range ls {
+		j.Arr()
+		for _, b := range ls {
+			j.I(int64(s.Intel(s.CentreVariety(a), s.CentreVariety(b)).Permille()))
+		}
+		j.EndArr()
+	}
+	j.EndArr().End()
 	return j.Bytes()
 }
