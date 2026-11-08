@@ -1,0 +1,380 @@
+// Package sim runs the tick loop. A run is fully determined by its seed,
+// config and intervention log; replay rebuilds everything else.
+package sim
+
+import (
+	"isogloss/engine/fx"
+	"isogloss/engine/history"
+	"isogloss/engine/lex"
+	"isogloss/engine/pop"
+	"isogloss/engine/rng"
+	"isogloss/engine/world"
+)
+
+// Config holds every tunable that affects a run. All values are integers.
+type Config struct {
+	World world.Config
+	// SoundRate: per-mille chance per community per tick of proposing a sound change.
+	SoundRate uint32
+	// LexRate scales word-replacement rates (1000 = default).
+	LexRate uint32
+	// Candidates: sound-change candidates sampled per proposal.
+	Candidates int
+	// ClusterEvery: ticks between language clustering.
+	ClusterEvery int32
+	// SmallBias, LargeBias: community-size biases (per-mille sliders, 500 = moderate).
+	// Small isolated communities favour rarer templates; large connected ones
+	// favour simplification.
+	SmallBias, LargeBias uint32
+	// Threshold: intelligibility (per-mille) for two varieties to be one language; 0 = default.
+	Threshold uint32
+	// HomelandRadius: hexes around the homeland settled at tick 0.
+	HomelandRadius int32
+}
+
+// DefaultConfig returns the standard configuration.
+func DefaultConfig() Config {
+	return Config{
+		World:          world.DefaultConfig,
+		SoundRate:      60,
+		LexRate:        800,
+		Candidates:     4,
+		ClusterEvery:   4,
+		SmallBias:      500,
+		LargeBias:      500,
+		HomelandRadius: 1,
+	}
+}
+
+// Language is a cluster of mutually intelligible varieties, tracked over time.
+type Language struct {
+	ID        int32
+	Name      string
+	Centre    int32 // hex
+	Members   []int32
+	Continuum int32
+	Parent    int32 // language it split from, -1 for the first
+	Born      int32
+	Died      int32 // -1 while spoken
+}
+
+// Alive reports whether the language is still spoken.
+func (l *Language) Alive() bool { return l.Died < 0 }
+
+// LangFrame records language assignment per hex at one clustering tick.
+type LangFrame struct {
+	Tick int32
+	Lang []int32 // per hex, -1 if unsettled
+}
+
+type liveInnov struct {
+	in   *history.Innovation
+	wave *pop.Wave
+	age  int32
+}
+
+// Sim is one simulation run.
+type Sim struct {
+	Seed  uint64
+	Cfg   Config
+	Tick  int32
+	World *world.World
+	Proto *lex.Proto
+	Reg   *history.Registry
+	Roots []history.Root
+
+	ByHex []*pop.Community // nil for unsettled hexes
+	Langs []*Language      // all languages ever, by ID
+	Hist  []LangFrame
+	Tree  []history.TreeNode
+	Log   []history.Event
+
+	Interventions []Intervention
+
+	live     []*liveInnov
+	ap       *history.Applier
+	vars     map[uint64]*lex.Variety
+	cl       *pop.Clusterer
+	present  []bool
+	contacts [][]pop.Contact
+	prestige []fx.Q16
+	nextRoot lex.EtymID
+}
+
+// New creates a run at tick 0: map, proto-language and homeland.
+func New(seed uint64, cfg Config) *Sim {
+	s := &Sim{
+		Seed: seed, Cfg: cfg,
+		World:    world.Generate(seed, cfg.World),
+		Proto:    lex.GenerateProto(rng.New(seed, rng.Key("proto"))),
+		Reg:      &history.Registry{},
+		vars:     map[uint64]*lex.Variety{},
+		cl:       pop.NewClusterer(),
+		nextRoot: lex.FirstCoinedRoot,
+	}
+	if cfg.Threshold > 0 {
+		s.cl.Thr = fx.FromPermille(cfg.Threshold)
+	}
+	s.ap = history.NewApplier(s.Reg)
+	n := len(s.World.Hexes)
+	s.ByHex = make([]*pop.Community, n)
+	s.present = make([]bool, n)
+	s.prestige = make([]fx.Q16, n)
+	s.vars[s.Proto.Variety.Key] = s.Proto.Variety
+
+	home := s.homeland()
+	for _, h := range s.World.Land {
+		if s.World.Distance(home, h) <= cfg.HomelandRadius {
+			s.settle(h, 400, s.Proto.Variety, nil)
+		}
+	}
+	s.log(history.Event{Kind: "settle", Hex: home, Lang: -1, Text: "the proto-language is spoken around the homeland"})
+	s.refreshContacts()
+	s.cluster()
+	return s
+}
+
+// homeland picks the most fertile hex near the middle of the continent.
+func (s *Sim) homeland() int32 {
+	best, score := s.World.Land[0], int32(-1<<30)
+	cx, cy := s.World.W/2, s.World.H/2
+	for _, h := range s.World.Land {
+		hx := &s.World.Hexes[h]
+		if hx.Biome == world.Island || hx.Biome == world.Mountain {
+			continue
+		}
+		dx, dy := hx.Col-cx, hx.Row-cy
+		sc := hx.Capacity - (dx*dx+dy*dy)*20
+		if sc > score {
+			best, score = h, sc
+		}
+	}
+	return best
+}
+
+func (s *Sim) settle(h, people int32, v *lex.Variety, from *pop.Community) {
+	c := &pop.Community{Hex: h, Pop: people, Variety: v, Lang: -1, Founded: s.Tick}
+	if from != nil {
+		c.Lang = from.Lang
+		c.Diffusing = append([]pop.Diffusion(nil), from.Diffusing...)
+		for _, l := range s.live {
+			l.wave.Level[h] = l.wave.Level[from.Hex]
+			l.wave.Applied[h] = l.wave.Applied[from.Hex]
+		}
+	}
+	s.ByHex[h] = c
+	s.present[h] = true
+}
+
+// Communities returns settled communities in hex order.
+func (s *Sim) Communities() []*pop.Community {
+	var out []*pop.Community
+	for _, c := range s.ByHex {
+		if c != nil {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+func (s *Sim) log(e history.Event) {
+	e.Tick = s.Tick
+	s.Log = append(s.Log, e)
+}
+
+func (s *Sim) intern(v *lex.Variety) *lex.Variety {
+	if old, ok := s.vars[v.Key]; ok {
+		return old
+	}
+	s.vars[v.Key] = v
+	return v
+}
+
+func (s *Sim) refreshContacts() {
+	s.contacts = pop.ContactWeights(s.World, s.present)
+	var maxPop int32
+	for _, c := range s.ByHex {
+		if c != nil && c.Pop > maxPop {
+			maxPop = c.Pop
+		}
+	}
+	for h, c := range s.ByHex {
+		if c != nil {
+			s.prestige[h] = pop.Prestige(c.Pop, maxPop)
+		} else {
+			s.prestige[h] = 0
+		}
+	}
+}
+
+// Step runs one tick (one generation, ~25 years) in the fixed order.
+func (s *Sim) Step() {
+	s.Tick++
+	s.applyInterventions() // 1
+	s.grow()               // 2
+	s.refreshContacts()    // 3
+	s.propose()            // 4
+	s.spread()             // 5, 6, 7 (apply includes repair)
+	s.diffuse()
+	if s.Tick%s.Cfg.ClusterEvery == 0 { // 10
+		s.cluster()
+	}
+}
+
+// Run steps n ticks.
+func (s *Sim) Run(n int) {
+	for i := 0; i < n; i++ {
+		s.Step()
+	}
+}
+
+// grow applies logistic population growth and expansion into empty land.
+func (s *Sim) grow() {
+	type colony struct {
+		from *pop.Community
+		to   int32
+	}
+	var colonies []colony
+	claimed := map[int32]bool{}
+	for _, c := range s.ByHex {
+		if c == nil {
+			continue
+		}
+		cap := s.World.Hexes[c.Hex].Capacity
+		c.Pop += c.Pop * 500 / 1000 * (cap - c.Pop) / max(cap, 1)
+		if c.Pop < 10 {
+			c.Pop = 10
+		}
+		if c.Pop*10 < cap*4 {
+			continue
+		}
+		best, bestCost := int32(-1), int32(1<<30)
+		for _, nb := range s.World.Hexes[c.Hex].Nbr {
+			if nb < 0 || s.ByHex[nb] != nil || claimed[nb] {
+				continue
+			}
+			cost := s.World.Cost(c.Hex, nb)
+			if cost < 0 {
+				continue
+			}
+			cost -= s.World.Hexes[nb].Capacity / 20 // prefer fertile land
+			if cost < bestCost {
+				best, bestCost = nb, cost
+			}
+		}
+		if best >= 0 {
+			claimed[best] = true
+			colonies = append(colonies, colony{c, best})
+		}
+	}
+	for _, col := range colonies {
+		people := col.from.Pop / 3
+		col.from.Pop -= people
+		s.settle(col.to, people, col.from.Variety, col.from)
+	}
+}
+
+// signedQ16 converts per-mille (may be negative) to signed Q16.
+func signedQ16(pm int32) int32 { return pm * 65536 / 1000 }
+
+func hashIH(innov uint32, hex int) uint32 {
+	h := uint64(innov)*0x9E3779B97F4A7C15 ^ uint64(hex)*0xC2B2AE3D27D4EB4F
+	h ^= h >> 31
+	h *= 0xbf58476d1ce4e5b9
+	h ^= h >> 29
+	return uint32(h)
+}
+
+// spread advances every live innovation's wave and applies it where it
+// crosses one half, in innovation order then hex order.
+func (s *Sim) spread() {
+	type cross struct {
+		l   *liveInnov
+		hex int32
+	}
+	var crossings []cross
+	fade := signedQ16(-350)
+	for _, l := range s.live {
+		spreading := l.age < l.in.Life
+		id := l.in.ID
+		rate := func(h int) int32 {
+			if !spreading {
+				return fade
+			}
+			f := int64(300 + hashIH(id, h)%1400) // per-mille local receptiveness
+			return int32(int64(l.in.Rate) * f / 1000)
+		}
+		for _, h := range l.wave.Step(s.present, s.contacts, s.prestige, rate, spreading) {
+			crossings = append(crossings, cross{l, h})
+		}
+		l.age++
+	}
+	for _, c := range crossings {
+		s.adopt(s.ByHex[c.hex], c.l.in)
+		if c.l.in.Kind == history.Sound && c.l.wave.Count() == 1 {
+			s.log(history.Event{Kind: "innovation", Hex: c.hex, Innov: c.l.in.ID, Lang: s.ByHex[c.hex].Lang, Text: c.l.in.Label()})
+		}
+	}
+	kept := s.live[:0]
+	for _, l := range s.live {
+		if l.age >= l.in.Life && (!l.wave.Alive() || l.age > l.in.Life+8) {
+			s.ap.Forget(l.in.ID)
+			continue
+		}
+		kept = append(kept, l)
+	}
+	s.live = kept
+}
+
+// adopt applies an innovation in one community. Diffusible sound changes
+// start with one frequency class and creep on in diffuse().
+func (s *Sim) adopt(c *pop.Community, in *history.Innovation) {
+	e := lex.Entry{Kind: lex.EntryInnov, Innov: in.ID, Tick: s.Tick, Lo: 1, Hi: 5}
+	switch in.Diffuse {
+	case "freq-first":
+		e.Hi = 1
+		c.Diffusing = append(c.Diffusing, pop.Diffusion{Innov: in.ID, Next: 2, Step: 1})
+	case "rare-first":
+		e.Lo = 5
+		c.Diffusing = append(c.Diffusing, pop.Diffusion{Innov: in.ID, Next: 4, Step: -1})
+	}
+	c.Variety = s.intern(s.ap.Apply(c.Variety, e))
+}
+
+// diffuse extends lexically diffusing changes by one frequency class per
+// tick; each step may stall for good, leaving exceptions.
+func (s *Sim) diffuse() {
+	for _, c := range s.ByHex {
+		if c == nil || len(c.Diffusing) == 0 {
+			continue
+		}
+		r := rng.New(s.Seed, rng.Key("diffuse"), uint64(s.Tick), uint64(c.Hex))
+		kept := c.Diffusing[:0]
+		for _, d := range c.Diffusing {
+			if r.Permille(150) {
+				continue // stalled
+			}
+			e := lex.Entry{Kind: lex.EntryInnov, Innov: d.Innov, Tick: s.Tick, Lo: d.Next, Hi: d.Next}
+			c.Variety = s.intern(s.ap.Apply(c.Variety, e))
+			next := int8(d.Next) + d.Step
+			if next >= 1 && next <= 5 {
+				d.Next = uint8(next)
+				kept = append(kept, d)
+			}
+		}
+		c.Diffusing = kept
+	}
+}
+
+// LiveCount returns how many innovations are still spreading.
+func (s *Sim) LiveCount() int { return len(s.live) }
+
+// Wave returns the live wave of an innovation, or nil.
+func (s *Sim) Wave(id uint32) *pop.Wave {
+	for _, l := range s.live {
+		if l.in.ID == id {
+			return l.wave
+		}
+	}
+	return nil
+}

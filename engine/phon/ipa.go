@@ -27,7 +27,8 @@ type diacritic struct {
 type ipaTable struct {
 	symbols  []Symbol
 	byIPA    map[string]int     // canonical symbol → index
-	byFeat   map[FeatureSet]int // features → most frequent symbol
+	byFeat   map[FeatureSet]int // features → preferred symbol
+	freqFeat map[FeatureSet]int // features → highest frequency among its symbols
 	diac     []diacritic        // ordered by usefulness for rendering
 	diacByMk map[string]int     // mark → index into diac
 	nfc      map[rune]string    // precomposed → decomposed
@@ -94,6 +95,7 @@ func loadTable() *ipaTable {
 	t := &ipaTable{
 		byIPA:    map[string]int{},
 		byFeat:   map[FeatureSet]int{},
+		freqFeat: map[FeatureSet]int{},
 		diacByMk: map[string]int{},
 		nfc:      map[rune]string{},
 	}
@@ -107,7 +109,10 @@ func loadTable() *ipaTable {
 		if n := utf8.RuneCountInString(sym.IPA); n > t.maxRunes {
 			t.maxRunes = n
 		}
-		// Prefer the most frequent, then the shortest symbol for a bundle.
+		if freq > t.freqFeat[f] {
+			t.freqFeat[f] = freq
+		}
+		// Prefer the shortest, then the most frequent symbol for a bundle.
 		if j, ok := t.byFeat[f]; !ok || betterSymbol(sym, t.symbols[j]) {
 			t.byFeat[f] = i
 		}
@@ -141,6 +146,10 @@ func betterSymbol(a, b Symbol) bool {
 	}
 	return a.IPA < b.IPA
 }
+
+// Frequency returns how many PHOIBLE inventories per 10000 contain a segment
+// with exactly these features (0 for bundles not in the table).
+func Frequency(f FeatureSet) int { return tbl().freqFeat[f] }
 
 // Symbols returns the IPA table (read-only).
 func Symbols() []Symbol { return tbl().symbols }

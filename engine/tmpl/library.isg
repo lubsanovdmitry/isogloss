@@ -1,0 +1,284 @@
+# Isogloss sound-change templates.
+#
+#   template NAME weight=W family=F [diffuse=freq-first|rare-first] [stress=RULE]
+#   slot X = alt | alt | @seg[MATRIX]     (@seg: each inventory segment matching)
+#   near A B N                            (A, B segments within feature distance N)
+#   differ A B
+#       RULE BODY with $X substitutions (clauses and except lines)
+#
+# Weights are rough typological frequencies (Index Diachronica and the
+# survey literature as reference only; values are hand-set).
+# Classes available to every body: C V stop affr fric obs nasal liquid glide son sib.
+
+# ---------------------------------------------------------------- lenition
+template intervocalic-voicing weight=60 family=lenition
+slot S = stop | stop +lab | stop +cor | stop +dors
+    [$S -voice] => [+voice] / V _ V
+
+template intervocalic-spirantization weight=40 family=lenition
+slot S = stop | stop +lab | stop +cor | stop +dors
+    [$S +voice -nas -cor] => [+cont +delrel] / V _ V
+    [$S +voice -nas +cor] => [+cont +delrel +dist] / V _ V
+
+template intervocalic-fricative-voicing weight=25 family=lenition
+    [fric -voice] => [+voice] / V _ V
+
+template stop-spirantization weight=12 family=lenition
+slot S = stop -voice | stop -voice +dors | stop -voice +lab | stop -voice +cor
+slot E = V _ | _ V | V _ V
+    [$S -cor] => [+cont +delrel] / $E
+    [$S +cor] => [+cont +delrel +dist] / $E
+
+template s-debuccalization weight=20 family=lenition
+slot E = _ C | V _ V | _ # | # _
+    s => h / $E
+
+template h-loss weight=30 family=lenition diffuse=freq-first
+slot E = _ # | V _ V | _ C | # _
+    h => * / $E
+
+template flapping weight=12 family=lenition
+    [stop +cor] => ɾ / V _ [+syl stress:0]
+
+template final-obstruent-loss weight=20 family=lenition
+slot S = stop | obs | fric
+    $S => * / V _ #
+
+template deaffrication weight=25 family=lenition
+slot P = t͡ʃ => ʃ | t͡s => s | d͡ʒ => ʒ | d͡z => z
+    $P
+
+template velar-fricative-to-h weight=18 family=lenition
+    x => h
+
+template aspiration-loss weight=20 family=lenition
+    [obs +sg] => [-sg]
+
+template glide-loss weight=10 family=lenition
+slot P = w => * / _ [+syl +round] | j => * / _ [+syl +front] | w => * / # _ | j => * / # _
+    $P
+
+# ---------------------------------------------------------------- fortition
+template j-fortition weight=10 family=fortition
+slot O = ʒ | d͡ʒ | ɟ
+    j => $O / # _
+
+template w-fortition weight=10 family=fortition
+slot O = v | b | β | ɡʷ
+    w => $O / # _
+
+template initial-aspiration weight=6 family=fortition
+    [stop -voice] => [+sg] / # _
+
+# ---------------------------------------------------------------- assimilation
+template nasal-place-assimilation weight=50 family=assimilation
+slot P = m / _ [-syl +lab] | n / _ [-syl +cor] | ŋ / _ [-syl +dors]
+    nasal => $P
+
+template regressive-voicing weight=35 family=assimilation
+    [obs -voice] => [+voice] / _ [obs +voice]
+
+template regressive-devoicing weight=35 family=assimilation
+    [obs +voice] => [-voice] / _ [obs -voice]
+
+template final-devoicing weight=40 family=assimilation diffuse=freq-first
+    [obs +voice] => [-voice] / _ #
+    except / _ + V
+
+template vowel-nasalization weight=20 family=assimilation
+    V => [+nas] / _ nasal C, _ nasal #
+
+template nasal-coda-loss weight=15 family=assimilation
+    nasal => * / [+syl +nas] _ C, [+syl +nas] _ #
+
+template s-voicing weight=15 family=assimilation
+    [sib -voice] => [+voice] / V _ V
+
+# ---------------------------------------------------------------- palatalization
+template velar-palatalization weight=45 family=palatalization
+slot P = [stop +dors -voice] => t͡ʃ | [stop +dors +voice] => d͡ʒ | x => ʃ | [stop +dors -voice] => t͡s
+slot E = _ [+syl +front] | _ [+syl +front +high] | _ j
+    $P / $E
+
+template coronal-assibilation weight=20 family=palatalization
+slot P = [stop +cor -voice] => t͡s | [stop +cor +voice] => d͡z | [stop +cor -voice] => t͡ʃ
+slot E = _ [+syl +front +high] | _ j
+    $P / $E
+
+template s-palatalization weight=12 family=palatalization
+    s => ʃ / _ [+syl +front +high], _ j
+
+template palatal-glide-absorption weight=12 family=palatalization
+    j => * / [+delrel -cont] _, ʃ _
+
+# ---------------------------------------------------------------- umlaut and harmony
+template i-umlaut weight=20 family=umlaut
+slot T = [+syl +back -low] | [+syl +back] | [+syl +low]
+    $T => [-back +front] / _ C* [+syl +high +front -cons stress:0]
+
+template a-umlaut weight=12 family=umlaut
+    [+syl +high] => [-high] / _ C* [+syl +low stress:0]
+
+template front-harmony weight=6 family=umlaut
+    [+syl +back -low] => [-back +front] / [+syl +front] C* _
+
+template round-harmony weight=5 family=umlaut
+    [+syl +high -round] => [+round +back -front] / [+syl +round] C* _
+
+# ---------------------------------------------------------------- vowel shifts
+template mid-vowel-raising weight=25 family=vowel-shift
+slot T = +front | +back |
+slot Q = | stress:0 | stress:1
+slot E = | / _ #
+    [+syl -high -low $T $Q] => [+high] $E
+
+template high-vowel-lowering weight=12 family=vowel-shift
+slot T = +front | +back |
+slot Q = | stress:0
+slot E = | / _ # | / _ C C
+    [+syl +high $T $Q] => [-high] $E
+
+template low-vowel-raising weight=15 family=vowel-shift
+slot Q = | stress:1
+slot E = | / _ # | / _ C* [+syl +high +front] | / _ nasal
+    [+syl +low $Q] => [-low +front] $E
+
+template back-vowel-fronting weight=8 family=vowel-shift
+    [+syl +back +high +round] => [-back +front]
+
+template a-backing weight=8 family=vowel-shift
+    [+syl +low -front -back] => [+back]
+
+template front-unrounding weight=25 family=vowel-shift diffuse=freq-first
+    [+syl +front +round] => [-round]
+
+template back-unrounding weight=5 family=vowel-shift
+    [+syl +back +high +round] => [-round -back]
+
+template diphthongization weight=15 family=vowel-shift diffuse=freq-first
+slot A = @seg[+syl -high -low +front -long] | @seg[+syl -high -low +back -long]
+slot G = j | w
+    [$A stress:1] => $G$A
+
+template monophthongization weight=20 family=vowel-shift
+slot P = [+syl +low] j => e | [+syl +low] w => o | [+syl +low] [+syl +high +front] => eː | [+syl +low] [+syl +high +back] => oː
+    $P
+
+template vowel-merger weight=25 family=merger diffuse=freq-first
+slot A = @seg[+syl]
+slot B = @seg[+syl]
+near A B 4
+    $A => $B
+
+template consonant-merger weight=18 family=merger
+slot A = @seg[-syl]
+slot B = @seg[-syl]
+near A B 3
+    $A => $B
+
+template length-loss weight=20 family=length
+    [+syl +long] => [-long +short]
+
+template closed-syllable-shortening weight=12 family=length
+    [+syl +long] => [-long +short] / _ C C, _ C #
+
+template open-syllable-lengthening weight=10 family=length
+    [+syl stress:1 -long] => [+long -short] / _ C V
+
+template compensatory-lengthening weight=8 family=length
+slot L = h | s | n | r
+    [+syl -long] $L => [+long -short] * / _ C
+
+# ---------------------------------------------------------------- erosion
+template unstressed-reduction weight=35 family=erosion
+slot E = | / _ # | / _ C #
+    [+syl stress:0 -long -high] => ə $E
+
+template apocope weight=35 family=erosion
+slot E = C _ # | [+son -syl] _ # | [+syl +long] C _ # | C C _ #
+    [+syl stress:0 -long] => * / $E
+
+template syncope weight=25 family=erosion
+slot E = [stress:1] C _ C V | V C _ C V | V C _ [+son -syl] V
+    [+syl stress:0 -long] => * / $E
+
+template aphaeresis weight=6 family=erosion
+    [+syl stress:0] => * / # _ C V
+
+template final-nasal-loss weight=15 family=erosion
+    nasal => * / V _ #
+
+template final-s-loss weight=15 family=erosion
+    [sib +cont] => * / V _ #
+
+template final-vowel-raising weight=8 family=erosion
+    [+syl -high -low stress:0] => [+high] / _ #
+
+template r-loss weight=6 family=erosion
+    r => * / V _ C, V _ #
+
+template l-vocalization weight=6 family=erosion
+    l => w / V _ C, V _ #
+
+template ʔ-loss weight=12 family=erosion
+    ʔ => * / V _ V, _ C
+
+# ---------------------------------------------------------------- clusters
+template medial-cluster-simplification weight=30 family=cluster
+    C => * / C _ C
+
+template coda-obstruent-assimilation weight=20 family=cluster
+    obs => * / V _ [obs]
+
+template initial-cluster-simplification weight=12 family=cluster
+slot T = C | stop | [+nas]
+    $T => * / # _ C
+
+template anaptyxis weight=12 family=cluster
+slot V = @seg[+syl -long -low]
+    * => $V / obs _ [+son -syl] V
+
+template prothesis weight=8 family=cluster
+slot V = @seg[+syl -long -low +front] | @seg[+syl -long -low]
+    * => $V / # _ s C
+
+template dissimilation weight=4 family=cluster
+slot P = r => l / _ V C* r | l => r / _ V C* l | m => n / _ V C* m
+    $P
+
+# ---------------------------------------------------------------- stress
+template stress-to-initial weight=6 family=stress stress=initial
+    V => [stress:0]
+    V => [stress:1] / # C* _
+
+template stress-to-penult weight=5 family=stress stress=penult
+    V => [stress:0]
+    V => [stress:1] / _ C* V C* #
+
+template stress-to-final weight=4 family=stress stress=final
+    V => [stress:0]
+    V => [stress:1] / _ C* #
+
+# ---------------------------------------------------------------- tone and phonation
+template tonogenesis-rise weight=10 family=tone
+    V ʔ => [tone:rise] * / _ #
+
+template tonogenesis-fall weight=8 family=tone
+slot L = h | s
+    V $L => [tone:fall] * / _ #
+
+template breathy-register weight=5 family=phonation
+    V => [phon:breathy] / [obs +voice] _
+
+template register-devoicing weight=8 family=phonation
+    [obs +voice] => [-voice] / _ [+syl phon:breathy]
+
+template register-to-low-tone weight=10 family=tone
+    [+syl phon:breathy] => [tone:L phon:modal]
+
+template glottal-to-creaky weight=5 family=phonation
+    V ʔ => [phon:creaky] * / _ #
+
+template tone-merger weight=6 family=tone
+slot P = [+syl tone:rise] => [tone:H] | [+syl tone:fall] => [tone:L] | [+syl tone:M] => [tone:L]
+    $P

@@ -1,5 +1,8 @@
 // Command isogloss is the native front end to the engine.
 //
+//	isogloss run --seed 42 --ticks 40 --out run.json
+//	isogloss etym run.json CONCEPT [--lang NAME]
+//	isogloss export --cldf DIR | --csv FILE run.json
 //	isogloss sca [-trace] rules.isg words.txt
 package main
 
@@ -14,11 +17,16 @@ import (
 
 	"isogloss/engine/phon"
 	"isogloss/engine/rules"
+	"isogloss/engine/tmpl"
 )
 
 func usage() {
 	fmt.Fprintln(os.Stderr, `usage:
-  isogloss sca [-trace] RULES.isg WORDS.txt   apply sound changes to a word list`)
+  isogloss run [--seed N] [--ticks N] [--out run.json]   simulate and save a run
+  isogloss etym RUN.json CONCEPT [--lang NAME]          trace a word's history
+  isogloss export (--cldf DIR | --csv FILE) RUN.json    export word lists
+  isogloss sca [-trace] RULES.isg WORDS.txt             apply sound changes to a word list
+                                                        (template classes such as stop, nasal are predefined)`)
 	os.Exit(2)
 }
 
@@ -30,6 +38,12 @@ func main() {
 	switch os.Args[1] {
 	case "sca":
 		err = runSCA(os.Args[2:], os.Stdout)
+	case "run":
+		err = runRun(os.Args[2:], os.Stdout)
+	case "etym":
+		err = runEtym(os.Args[2:], os.Stdout)
+	case "export":
+		err = runExport(os.Args[2:], os.Stdout)
 	default:
 		usage()
 	}
@@ -50,7 +64,7 @@ func runSCA(args []string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	file, err := rules.Parse(string(src))
+	file, err := rules.ParseWith(string(src), tmpl.PreludeFile())
 	if err != nil {
 		return fmt.Errorf("%s: %w", fs.Arg(0), err)
 	}
@@ -86,7 +100,7 @@ func stressed(w phon.Word) phon.Word {
 }
 
 type wordLine struct {
-	n            int
+	n           int
 	word, gloss string
 }
 

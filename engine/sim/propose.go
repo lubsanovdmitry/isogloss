@@ -1,0 +1,321 @@
+package sim
+
+import (
+	"slices"
+
+	"isogloss/engine/fx"
+
+	"isogloss/engine/history"
+	"isogloss/engine/lex"
+	"isogloss/engine/phon"
+	"isogloss/engine/pop"
+	"isogloss/engine/rng"
+	"isogloss/engine/tmpl"
+)
+
+// Word-replacement proposals per 100 000 community-ticks, by stability class.
+var lexRatePer100k = [6]int{0, 8, 25, 60, 120, 240}
+
+// seedLevel is the adoption level an innovation starts with at its origin.
+const seedLevelPermille = 200
+
+// simplifying families are favoured by large, connected communities.
+var simplifying = map[string]bool{"merger": true, "cluster": true, "erosion": true, "length": true}
+
+func (s *Sim) newInnov(r *rng.Stream, in *history.Innovation, origin int32) {
+	in.Origin, in.Tick = origin, s.Tick
+	in.Rate = signedQ16(int32(r.IntN(1000)) - 250) // −0.25 .. 0.75
+	in.Life = 5 + int32(r.IntN(11))
+	s.Reg.Add(in)
+	l := &liveInnov{in: in, wave: pop.NewWave(len(s.World.Hexes))}
+	l.wave.Level[origin] = fx.FromPermille(seedLevelPermille)
+	s.live = append(s.live, l)
+}
+
+// propose lets every community put forward new innovations.
+func (s *Sim) propose() {
+	for _, c := range s.ByHex {
+		if c == nil {
+			continue
+		}
+		r := rng.New(s.Seed, rng.Key("propose"), uint64(s.Tick), uint64(c.Hex))
+		if r.Permille(s.Cfg.SoundRate) {
+			if cand := s.pickSound(r, c); cand != nil {
+				s.newInnov(r, &history.Innovation{
+					Kind: history.Sound, Template: cand.T.Name, Family: cand.T.Family,
+					Src: cand.Src, Rule: cand.Rule, Diffuse: cand.T.Diffuse, Stress: cand.T.Stress,
+				}, c.Hex)
+			}
+		}
+		for _, con := range lex.Concepts() {
+			rate := lexRatePer100k[con.Stab] * int(s.Cfg.LexRate) / 1000
+			if con.Taboo {
+				rate *= 3
+			}
+			if r.IntN(100000) >= rate {
+				continue
+			}
+			if lc := s.coin(r, c, con.ID); lc != nil {
+				s.newInnov(r, &history.Innovation{Kind: history.Lexical, Lex: lc, Stress: -1}, c.Hex)
+			}
+		}
+	}
+}
+
+// pickSound samples candidate sound changes for a community and picks one by
+// weight: template frequency (adjusted for community size and recency) to
+// choose templates, then words affected and inventory pressure per candidate.
+func (s *Sim) pickSound(r *rng.Stream, c *pop.Community) *tmpl.Candidate {
+	lib := tmpl.Library()
+	v := c.Variety
+	inv := v.Inventory()
+
+	// Recently fired templates in this variety (decay factor d_recent).
+	recent := map[string]bool{}
+	for h, n := v.Hist, 0; h != nil && n < 3; h = h.Parent {
+		e := h.E
+		if e.Kind != lex.EntryInnov {
+			continue
+		}
+		if in := s.Reg.Get(e.Innov); in.Kind == history.Sound {
+			recent[in.Template] = true
+			n++
+		}
+	}
+	links := len(s.contacts[c.Hex])
+	small := c.Pop < 300 && links <= 2
+	large := c.Pop > 1000 && links >= 4
+	var mean uint64
+	for _, t := range lib {
+		mean += uint64(t.Weight)
+	}
+	mean /= uint64(len(lib))
+	w := make([]uint32, len(lib))
+	for i, t := range lib {
+		x := uint64(t.Weight) * 1000
+		if small { // flatten toward the mean: rare changes become likelier
+			xi, m := int64(x), int64(mean*1000)
+			xi += (m - xi) * int64(s.Cfg.SmallBias) / 2000
+			x = uint64(max(xi, 1))
+		}
+		if large && simplifying[t.Family] {
+			x = x * uint64(1000+s.Cfg.LargeBias) / 1000
+		}
+		if recent[t.Name] {
+			x = x * 300 / 1000
+		}
+		w[i] = uint32(x / 1000)
+	}
+
+	var cands []*tmpl.Candidate
+	var scores []uint32
+	for k := 0; k < s.Cfg.Candidates; k++ {
+		ti := r.Weighted(w)
+		if ti < 0 {
+			break
+		}
+		cand, ok := lib[ti].Instantiate(r, inv)
+		if !ok {
+			continue
+		}
+		cands = append(cands, cand)
+		scores = append(scores, s.evaluate(cand, v, inv))
+	}
+	i := r.Weighted(scores)
+	if i < 0 {
+		return nil
+	}
+	return cands[i]
+}
+
+// evaluate scores a candidate (per-mille) on the variety's core vocabulary:
+// changes must affect enough words; mergers that create homophones are
+// dispreferred; typologically rare outputs are dispreferred; collapsing
+// small vowel systems is resisted and moving into a vacated slot (chain
+// shift) is boosted. Changes that leave no vowels or too few consonants
+// are rejected.
+func (s *Sim) evaluate(cand *tmpl.Candidate, v *lex.Variety, inv []phon.FeatureSet) uint32 {
+	affected, coreN := 0, 0
+	oldForms := map[uint64]int{}
+	newForms := map[uint64]int{}
+	newSegs := map[phon.FeatureSet]bool{}
+	for i := 0; i < v.Lex.Len(); i++ {
+		if !lex.Concepts()[i].Core() {
+			continue
+		}
+		coreN++
+		l := v.Lex.At(lex.ConceptID(i))
+		oldForms[l.Hash]++
+		w, ch := cand.Rule.Apply(l.Form, &v.Phonotax)
+		h := l.Hash
+		if ch {
+			affected++
+			h = lex.FormHash(w)
+		} else {
+			w = l.Form
+		}
+		newForms[h]++
+		for _, sg := range w.Segs {
+			newSegs[sg.F] = true
+		}
+	}
+	if affected < 3 {
+		return 0
+	}
+	score := uint64(1000)
+	if affected*100 > coreN*60 {
+		score = score * 600 / 1000
+	}
+	homo := func(m map[uint64]int) int {
+		n := 0
+		for _, c := range m { //lint:ordered summing is order-independent
+			if c > 1 {
+				n += c
+			}
+		}
+		return n
+	}
+	created := homo(newForms) - homo(oldForms)
+	limit := coreN * 3 / 100
+	switch {
+	case created > limit:
+		score = score * 150 / 1000
+	case created > 0:
+		score = score * uint64(1000-created*100) / 1000
+	}
+	// New phonemes: typicality from PHOIBLE; chain-shift boost.
+	inInv := func(f phon.FeatureSet) bool {
+		_, ok := slices.BinarySearchFunc(inv, f, cmpFeat)
+		return ok
+	}
+	vowelsAfter, consAfter := 0, 0
+	newSorted := make([]phon.FeatureSet, 0, len(newSegs))
+	for f := range newSegs { //lint:ordered sorted below
+		newSorted = append(newSorted, f)
+	}
+	slices.SortFunc(newSorted, cmpFeat)
+	vowelsBefore := 0
+	for _, f := range inv {
+		if f.Has(phon.Syllabic) {
+			vowelsBefore++
+		}
+	}
+	for _, f := range newSorted {
+		if f.Has(phon.Syllabic) {
+			vowelsAfter++
+		} else {
+			consAfter++
+		}
+		if inInv(f) {
+			continue
+		}
+		typ := uint64(min(max(phon.Frequency(f)*1000/2000, 100), 1000))
+		score = score * typ / 1000
+		if s.Tick-v.VacTick <= 4 && slices.Contains(v.Vacated, f) {
+			score = score * 3
+		}
+	}
+	if vowelsAfter < 2 || consAfter < 5 {
+		return 0
+	}
+	if vowelsAfter < vowelsBefore {
+		switch {
+		case vowelsBefore <= 4:
+			score = score * 300 / 1000
+		case vowelsBefore >= 7:
+			score = score * 1500 / 1000
+		}
+	}
+	return uint32(min(score, 1<<30))
+}
+
+func cmpFeat(a, b phon.FeatureSet) int {
+	switch {
+	case a.Val < b.Val:
+		return -1
+	case a.Val > b.Val:
+		return 1
+	case a.Mask < b.Mask:
+		return -1
+	case a.Mask > b.Mask:
+		return 1
+	}
+	return 0
+}
+
+// coin builds a new word for a concept: a meaning shift along a CLICS edge
+// (the neighbour's word gains this sense), a compound of native words, or a
+// fresh root. Taboo concepts favour euphemistic compounds.
+func (s *Sim) coin(r *rng.Stream, c *pop.Community, con lex.ConceptID) *history.LexChange {
+	v := c.Variety
+	cs := lex.Concepts()
+	cur := v.Lex.At(con)
+	edges := lex.Colex(con)
+	wShift, wComp, wRoot := uint32(50), uint32(25), uint32(25)
+	if len(edges) == 0 {
+		wShift = 0
+	}
+	if cs[con].Taboo {
+		wComp, wRoot = 70, 5
+	}
+	switch r.Weighted([]uint32{wShift, wComp, wRoot}) {
+	case 0:
+		ew := make([]uint32, len(edges))
+		for i, e := range edges {
+			ew[i] = uint32(e.Families)
+		}
+		e := edges[r.Weighted(ew)]
+		src := v.Lex.At(e.To)
+		if src.Hash == cur.Hash {
+			return nil
+		}
+		return &history.LexChange{Concept: con, Form: src.Form.Clone(), Freq: cur.Freq, Etym: src.Etym, How: "shift from '" + cs[e.To].Label + "'"}
+	case 1:
+		// Head: a related concept (CLICS neighbour or same field); modifier:
+		// a property word ("the brown one" for taboo animals).
+		var heads, mods []lex.ConceptID
+		for _, e := range edges {
+			heads = append(heads, e.To)
+		}
+		for _, x := range cs {
+			if x.ID == con {
+				continue
+			}
+			if x.Field == cs[con].Field && x.Category == cs[con].Category {
+				heads = append(heads, x.ID)
+			}
+			if x.Category == "Property" {
+				mods = append(mods, x.ID)
+			}
+		}
+		if len(heads) == 0 || len(mods) == 0 {
+			return nil
+		}
+		h := heads[r.IntN(len(heads))]
+		m := mods[r.IntN(len(mods))]
+		hw, mw := v.Lex.At(h).Form, v.Lex.At(m).Form
+		if len(hw.Segs)+len(mw.Segs) > 10 {
+			return nil
+		}
+		w := phon.Word{Segs: append(append([]phon.Segment(nil), mw.Segs...), hw.Segs...)}
+		for i := range w.Segs {
+			w.Segs[i].Stress = 0
+		}
+		w.Bounds = []phon.Boundary{{At: len(mw.Segs), Kind: phon.BMorpheme}}
+		how := "compound '" + cs[m].Label + "'+'" + cs[h].Label + "'"
+		if cs[con].Taboo {
+			how = "euphemism " + how
+		}
+		return &history.LexChange{Concept: con, Form: w, Freq: cur.Freq, Etym: s.newRoot(c.Hex, how), How: how}
+	default:
+		w := lex.NewRoot(r, v, cur.Freq)
+		return &history.LexChange{Concept: con, Form: w, Freq: cur.Freq, Etym: s.newRoot(c.Hex, "new root"), How: "new root"}
+	}
+}
+
+func (s *Sim) newRoot(origin int32, how string) lex.EtymID {
+	id := s.nextRoot
+	s.nextRoot++
+	s.Roots = append(s.Roots, history.Root{ID: id, Tick: s.Tick, Origin: origin, How: how})
+	return id
+}

@@ -28,6 +28,20 @@ func (pat *SegPat) Match(w *phon.Word, i int) bool {
 	return true
 }
 
+// MatchFeatures reports whether a bundle matches the pattern, ignoring
+// prosodic conditions (which need a word context).
+func (pat *SegPat) MatchFeatures(f phon.FeatureSet) bool {
+	if !f.Matches(pat.Feat) || (pat.Alts != nil && pat.altIndex(f) < 0) {
+		return false
+	}
+	for _, c := range pat.Classes {
+		if !c.Pat.MatchFeatures(f) {
+			return false
+		}
+	}
+	return true
+}
+
 func (pat *SegPat) altIndex(f phon.FeatureSet) int {
 	for k, a := range pat.Alts {
 		if a == f {

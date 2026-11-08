@@ -18,3 +18,50 @@ var Diacritics string
 //
 //go:embed nfc.tsv
 var NFC string
+
+// Concepts: concept list with Concepticon IDs, fields and curated metadata.
+//
+//go:embed concepts.tsv
+var Concepts string
+
+// Colex: CLICS³ colexification edges between our concepts.
+//
+//go:embed colex.tsv
+var Colex string
+
+// WALS: word-order value counts and joint counts.
+//
+//go:embed wals.tsv
+var WALS string
+
+// Romance: IE-CoR forms of five Romance languages, for calibration tests.
+//
+//go:embed romance.tsv
+var Romance string
+
+// Lines splits an embedded TSV table into fields, skipping blank lines and
+// '#' comments.
+func Lines(s string) [][]string {
+	var out [][]string
+	start := 0
+	for i := 0; i <= len(s); i++ {
+		if i < len(s) && s[i] != '\n' {
+			continue
+		}
+		line := s[start:i]
+		start = i + 1
+		if line == "" || line[0] == '#' {
+			continue
+		}
+		var fields []string
+		f := 0
+		for j := 0; j <= len(line); j++ {
+			if j == len(line) || line[j] == '\t' {
+				fields = append(fields, line[f:j])
+				f = j + 1
+			}
+		}
+		out = append(out, fields)
+	}
+	return out
+}

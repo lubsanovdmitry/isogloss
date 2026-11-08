@@ -156,3 +156,14 @@ func TestTemplate(t *testing.T) {
 		t.Error(tp.String())
 	}
 }
+
+func TestRomanize(t *testing.T) {
+	for in, want := range map[string]string{"ˈʃaŋɡə": "shange", "θaːt͡ʃ": "thaach", "kʰyːd": "küüd"} {
+		if got := Romanize(MustParseWord(in)); got != want {
+			t.Errorf("%s → %s, want %s", in, got, want)
+		}
+	}
+	if Capitalize("ünal") != "Ünal" {
+		t.Error("capitalize")
+	}
+}

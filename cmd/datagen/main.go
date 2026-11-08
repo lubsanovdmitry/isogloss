@@ -36,6 +36,19 @@ func main() {
 	if err := genPhoible(); err != nil {
 		log.Fatal("phoible: ", err)
 	}
+	concepts, err := genConcepts()
+	if err != nil {
+		log.Fatal("concepts: ", err)
+	}
+	if err := genCLICS(concepts); err != nil {
+		log.Fatal("clics: ", err)
+	}
+	if err := genWALS(); err != nil {
+		log.Fatal("wals: ", err)
+	}
+	if err := genRomance(); err != nil {
+		log.Fatal("romance: ", err)
+	}
 }
 
 // fetch returns the local path of url, downloading it into the cache if needed.

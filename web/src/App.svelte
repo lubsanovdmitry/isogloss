@@ -1,0 +1,322 @@
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import { Engine, type Concept, type Event, type Frame, type InnovInfo, type InnovSummary, type Snapshot, type TreeNode, type World } from './lib/engine';
+  import Atlas from './lib/Atlas.svelte';
+  import TreeItem from './lib/TreeItem.svelte';
+  import WordPanel from './lib/WordPanel.svelte';
+  import TablePanel from './lib/TablePanel.svelte';
+  import LangPanel from './lib/LangPanel.svelte';
+  import RulePanel from './lib/RulePanel.svelte';
+  import Chronicle from './lib/Chronicle.svelte';
+
+  const engine = new Engine();
+  const YEARS = 25;
+
+  let world = $state<World | null>(null);
+  let snap = $state<Snapshot | null>(null);
+  let events = $state<Event[]>([]);
+  let concepts = $state<Concept[]>([]);
+  let seed = $state('42');
+  let selected = $state(-1);
+  let concept = $state('water');
+  let tab = $state<'tree' | 'word' | 'table' | 'lang' | 'rules' | 'log'>('tree');
+  let running = $state(false);
+  let speed = $state(2); // ticks per second
+  let busy = $state(false);
+  let status = $state('Loading the engine…');
+  let innovs = $state<InnovSummary[]>([]);
+  let overlay = $state<InnovInfo | null>(null);
+  let frames = $state<Frame[]>([]);
+  let viewIdx = $state(-1); // -1 = live
+  let focusLang = $state(-1);
+
+  const viewing = $derived(viewIdx >= 0 && viewIdx < frames.length ? frames[viewIdx] : null);
+  const langOf = $derived.by(() => {
+    const n = world ? world.hexes.length : 0;
+    const a = new Int32Array(n).fill(-1);
+    if (viewing) viewing.lang.forEach((l, i) => (a[i] = l));
+    else if (snap) for (const [h, , l] of snap.comms) a[h] = l;
+    return a;
+  });
+  const isoSet = $derived(overlay && !viewing ? new Set(overlay.applied) : null);
+  const nodes = $derived(new Map<number, TreeNode>((snap?.tree ?? []).map((n) => [n.id, n])));
+  const living = $derived(snap ? snap.langs.filter((l) => l.died < 0) : []);
+  const selLang = $derived(selected >= 0 ? langOf[selected] : -1);
+  const shownLang = $derived(focusLang >= 0 ? focusLang : selLang);
+
+  function accept(s: Snapshot, reset = false) {
+    snap = s;
+    events = reset ? s.events : [...events, ...s.events];
+    status = '';
+  }
+
+  async function refreshSide() {
+    innovs = (await engine.query<InnovSummary[]>('innovs', { min: 4 })).slice(0, 60);
+    frames = await engine.query<Frame[]>('frames');
+    if (overlay) overlay = await engine.query<InnovInfo>('innov', { id: overlay.id });
+  }
+
+  async function newRun() {
+    running = false;
+    busy = true;
+    status = 'Generating a continent and its proto-language…';
+    try {
+      const r = await engine.call<{ world: World; snapshot: Snapshot }>('init', { seed: seed.trim() || '1' });
+      world = r.world;
+      accept(r.snapshot, true);
+      selected = -1;
+      overlay = null;
+      viewIdx = -1;
+      focusLang = -1;
+      await refreshSide();
+    } catch (e: any) {
+      status = e.message ?? String(e);
+    }
+    busy = false;
+  }
+
+  async function step(n = 1) {
+    if (!snap) return;
+    busy = true;
+    viewIdx = -1;
+    try {
+      accept(await engine.call<Snapshot>('step', { n, since: snap.eventCount }));
+      await refreshSide();
+    } catch (e: any) {
+      status = e.message ?? String(e);
+      running = false;
+    }
+    busy = false;
+  }
+
+  async function play() {
+    running = !running;
+    while (running) {
+      const t0 = performance.now();
+      await step(1);
+      const wait = 1000 / speed - (performance.now() - t0);
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    }
+  }
+
+  async function fork() {
+    if (!viewing) return;
+    running = false;
+    busy = true;
+    status = `Replaying to year ${viewing.tick * YEARS}…`;
+    const r = await engine.call<{ world: World; snapshot: Snapshot }>('fork', { tick: viewing.tick });
+    world = r.world;
+    accept(r.snapshot, true);
+    viewIdx = -1;
+    await refreshSide();
+    status = `Forked at year ${r.snapshot.tick * YEARS}. Later interventions were dropped.`;
+    busy = false;
+  }
+
+  async function showInnov(id: number) {
+    overlay = await engine.query<InnovInfo>('innov', { id });
+  }
+
+  async function bench() {
+    busy = true;
+    status = 'Timing a fresh 1000-year run…';
+    const r = await engine.call<{ ms: number; languages: number }>('bench', { seed: seed.trim() || '1', ticks: 40 });
+    status = `1000 years (40 generations) simulated in ${r.ms} ms in this browser, ending with ${r.languages} languages.`;
+    busy = false;
+  }
+
+  async function exportSave() {
+    const sv = await engine.call('save');
+    const blob = new Blob([JSON.stringify(sv, null, 1)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `isogloss-seed${sv.seed}-t${sv.tick}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  async function importSave(e: globalThis.Event) {
+    const f = (e.currentTarget as HTMLInputElement).files?.[0];
+    if (!f) return;
+    running = false;
+    busy = true;
+    status = 'Replaying the saved run…';
+    try {
+      const sv = JSON.parse(await f.text());
+      const r = await engine.call<{ world: World; snapshot: Snapshot }>('load', { save: sv.save ?? sv });
+      world = r.world;
+      seed = String(sv.save?.Seed ?? sv.seed ?? seed);
+      accept(r.snapshot, true);
+      await refreshSide();
+    } catch (err: any) {
+      status = 'Could not load that file: ' + (err.message ?? err);
+    }
+    busy = false;
+  }
+
+  function select(h: number) {
+    selected = h;
+    focusLang = -1;
+    if (tab === 'tree' || tab === 'log') tab = 'word';
+  }
+
+  onMount(async () => {
+    concepts = await engine.query<Concept[]>('concepts');
+    await newRun();
+  });
+
+  const tabs = [
+    ['tree', 'Family tree'], ['word', 'Word history'], ['table', 'Word lists'],
+    ['lang', 'Sound system'], ['rules', 'Change rules'], ['log', 'Chronicle'],
+  ] as const;
+</script>
+
+<header>
+  <h1>Isogloss</h1>
+  {#if snap}
+    <p class="where">
+      <span class="proto">{snap.proto}</span>
+      {#if viewing}<strong> as of year {viewing.tick * YEARS}</strong>{:else} · year {snap.tick * YEARS}, generation {snap.tick}{/if}
+      · {living.length} {living.length === 1 ? 'language' : 'languages'}
+    </p>
+  {/if}
+  <div class="controls">
+    <label>Seed <input bind:value={seed} size="6" aria-label="Seed" /></label>
+    <button onclick={newRun} disabled={busy && !running}>New world</button>
+    <span class="sep"></span>
+    <button onclick={() => step(1)} disabled={busy || running}>Next generation</button>
+    <button onclick={() => step(4)} disabled={busy || running}>+100 years</button>
+    <button class="primary" onclick={play} aria-pressed={running}>{running ? 'Pause' : 'Run'}</button>
+    <label class="speed">Speed
+      <input type="range" min="1" max="10" bind:value={speed} aria-label="Generations per second" />
+    </label>
+  </div>
+</header>
+
+<main>
+  <section class="atlas" aria-label="Map">
+    {#if world}
+      <Atlas {world} {langOf} {selected} isogloss={isoSet} onselect={select} />
+      <div class="under">
+        <label class="iso">
+          Isogloss
+          <select
+            value={overlay?.id ?? ''}
+            onchange={(e) => { const v = e.currentTarget.value; v ? showInnov(+v) : (overlay = null); }}
+          >
+            <option value="">none</option>
+            {#if overlay && !innovs.some((i) => i.id === overlay!.id)}<option value={overlay.id}>{overlay.label}</option>{/if}
+            {#each innovs as i (i.id)}<option value={i.id}>{i.label} (year {i.tick * YEARS}, {i.hexes} communities)</option>{/each}
+          </select>
+        </label>
+        {#if overlay}<p class="rule ipa">{overlay.rule.split('\n').slice(1).join(' ').trim() || overlay.label}</p>{/if}
+        {#if frames.length > 1}
+          <label class="scrub">
+            Look back
+            <input
+              type="range" min="0" max={frames.length} value={viewIdx < 0 ? frames.length : viewIdx}
+              oninput={(e) => { const v = +e.currentTarget.value; viewIdx = v >= frames.length ? -1 : v; }}
+              aria-label="Show the language map at an earlier time"
+            />
+          </label>
+          {#if viewing}<button onclick={fork} disabled={busy}>Continue from year {viewing.tick * YEARS}</button>{/if}
+        {/if}
+      </div>
+    {:else}
+      <p class="loading">{status}</p>
+    {/if}
+  </section>
+
+  <section class="inspector" aria-label="Inspector">
+    <div class="tabs" role="tablist">
+      {#each tabs as [id, label] (id)}
+        <button role="tab" aria-selected={tab === id} class:on={tab === id} onclick={() => (tab = id)}>{label}</button>
+      {/each}
+    </div>
+    <div class="panel" role="tabpanel">
+      {#if snap}
+        {#if tab === 'tree'}
+          {#if nodes.get(0)}
+            <ul class="tree"><TreeItem node={nodes.get(0)!} {nodes} langs={snap.langs} proto={snap.proto}
+              onlang={(id) => { focusLang = id; tab = 'lang'; }} oninnov={showInnov} /></ul>
+          {/if}
+          <p class="hint">Subgroups are defined by the sound changes all their members share, as in the comparative method. Click a change to draw its isogloss.</p>
+        {:else if tab === 'word'}
+          <WordPanel {engine} hex={selected} tick={snap.tick} {concepts} {concept} onconcept={(c) => (concept = c)} />
+        {:else if tab === 'table'}
+          <TablePanel {engine} tick={snap.tick} onpick={(c) => { concept = c; tab = 'word'; }} />
+        {:else if tab === 'lang'}
+          <LangPanel {engine} lang={shownLang} tick={snap.tick} oninnov={showInnov} />
+        {:else if tab === 'rules'}
+          <RulePanel {engine} hex={selected} onscheduled={(m) => (status = m)} />
+        {:else}
+          <Chronicle {events} oninnov={showInnov} onhex={select} />
+        {/if}
+      {/if}
+    </div>
+  </section>
+</main>
+
+<footer>
+  <p class="status" role="status">{status}</p>
+  <div class="files">
+    <button onclick={exportSave} disabled={!snap}>Save run</button>
+    <label class="file">Open run <input type="file" accept="application/json" onchange={importSave} /></label>
+    <button onclick={bench} disabled={busy || running}>Time 1000 years</button>
+  </div>
+</footer>
+
+<style>
+  header {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: baseline;
+    gap: 0.2rem 1.25rem;
+    padding: 0.8rem 1.25rem 0.6rem;
+    border-bottom: 1px solid var(--rule);
+  }
+  h1 { font-family: var(--serif); font-weight: 700; font-size: var(--t-2xl); margin: 0; letter-spacing: 0.01em; }
+  .where { margin: 0; color: var(--ink-soft); }
+  .proto { font-family: var(--serif); font-style: italic; font-size: var(--t-lg); color: var(--ink); }
+  .controls { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+  .controls label { font-size: var(--t-sm); color: var(--ink-soft); display: flex; align-items: center; gap: 0.35rem; }
+  .sep { width: 1px; height: 1.4rem; background: var(--rule); margin: 0 0.25rem; }
+  .speed input { width: 6rem; }
+
+  main {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    gap: 1.25rem;
+    padding: 1rem 1.25rem;
+    align-items: start;
+  }
+  .atlas { position: sticky; top: 0.5rem; }
+  .under { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; margin-top: 0.5rem; font-size: var(--t-sm); }
+  .under label { display: flex; gap: 0.4rem; align-items: center; color: var(--ink-soft); min-width: 0; }
+  .iso { min-width: 0; max-width: 100%; }
+  .iso select { max-width: min(22rem, 100%); min-width: 0; }
+  .iso { color: var(--isogloss) !important; font-weight: 600; }
+  .rule { margin: 0; color: var(--isogloss); flex-basis: 100%; }
+  .scrub input { width: 12rem; max-width: 50vw; }
+  .loading { color: var(--ink-soft); padding: 3rem 0; }
+
+  .tabs { display: flex; flex-wrap: wrap; gap: 0; border-bottom: 1px solid var(--rule); }
+  .tabs button { border: none; background: none; border-radius: 0; padding: 0.45rem 0.8rem; color: var(--ink-soft); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tabs button.on { color: var(--ink); border-bottom-color: var(--ink); font-weight: 600; }
+  .panel { padding: 0.9rem 0.1rem; }
+  .tree { padding: 0; margin: 0; }
+  .hint { color: var(--ink-soft); font-size: var(--t-sm); max-width: 60ch; }
+
+  footer { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; padding: 0.5rem 1.25rem 1rem; border-top: 1px solid var(--rule-faint); }
+  .status { margin: 0; color: var(--ink-soft); font-size: var(--t-sm); min-height: 1.3em; }
+  .files { display: flex; gap: 0.5rem; align-items: center; }
+  .file { font-size: var(--t-sm); border: 1px solid var(--rule); border-radius: 3px; padding: 0.3rem 0.7rem; cursor: pointer; background: var(--paper-raised); }
+  .file input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .file:focus-within { outline: 2px solid var(--focus); }
+
+  @media (max-width: 900px) {
+    main { grid-template-columns: minmax(0, 1fr); padding: 0.75rem 1rem; }
+    .atlas { position: static; }
+    header, footer { padding-left: 1rem; padding-right: 1rem; }
+  }
+</style>

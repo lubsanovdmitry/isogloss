@@ -26,10 +26,19 @@ type parser struct {
 }
 
 // Parse parses a rule file.
-func Parse(src string) (*File, error) {
+func Parse(src string) (*File, error) { return ParseWith(src, nil) }
+
+// ParseWith parses src with the classes of base (a prelude) predefined.
+// The returned file lists only the classes src itself declares.
+func ParseWith(src string, base *File) (*File, error) {
 	p := &parser{classes: map[string]*Class{}, file: &File{}}
 	p.predefine("C", "[-syl]")
 	p.predefine("V", "[+syl]")
+	if base != nil {
+		for _, c := range base.Classes {
+			p.classes[c.Name] = c
+		}
+	}
 	var cur *Rule
 	var last *Clause
 	for i, raw := range strings.Split(src, "\n") {

@@ -1,0 +1,63 @@
+// Typed client for the engine worker.
+export interface Hex { id: number; col: number; row: number; biome: string; elev: number; river: boolean; down: number }
+export interface World { w: number; h: number; hexes: Hex[] }
+export interface Lang { id: number; name: string; centre: number; size: number; continuum: number; parent: number; born: number; died: number }
+export interface TreeNode { id: number; lang: number; parent: number; children: number[]; shared: number; defining: { id: number; label: string }[]; definingLex: number }
+export interface Event { tick: number; kind: string; hex: number; innov: number; lang: number; text: string }
+export interface Snapshot {
+  tick: number; proto: string; innovations: number; live: number;
+  comms: [number, number, number][]; // hex, population, language
+  langs: Lang[]; tree: TreeNode[]; eventCount: number; events: Event[];
+}
+export interface Step { tick: number; innov: number; label: string; before: string; after: string }
+export interface Etym { concept: string; gloss: string; lang: string; hex: number; proto: string; protoLang: string; form: string; root: string; steps: Step[]; text: string }
+export interface Table { langs: string[]; rows: { concept: string; id: number; forms: string[]; cog: number[] }[] }
+export interface Sketch {
+  lang: Lang; vowels: string[]; consonants: string[]; template: string; stress: string; repair: string;
+  changes: { tick: number; innov?: number; label: string; rule?: string }[]; replacements: number;
+}
+export interface InnovInfo { id: number; kind: string; label: string; rule: string; origin: number; tick: number; applied: number[]; level?: number[] }
+export interface InnovSummary { id: number; label: string; tick: number; origin: number; hexes: number }
+export interface Concept { id: number; label: string; gloss: string; core: boolean; field: string }
+export interface Frame { tick: number; lang: number[] }
+export interface Save { version: number; seed: string; tick: number; threshold: number; interventions: { tick: number; kind: string; hex: number; rule: string }[] }
+
+export class EngineError extends Error {}
+
+export class Engine {
+  private worker = new Worker(new URL('../worker.ts', import.meta.url), { type: 'module' });
+  private next = 1;
+  private pending = new Map<number, (out: string) => void>();
+  readonly ready: Promise<void>;
+
+  constructor() {
+    this.worker.onmessage = (e: MessageEvent<{ id: number; out: string }>) => {
+      const done = this.pending.get(e.data.id);
+      if (done) {
+        this.pending.delete(e.data.id);
+        done(e.data.out);
+      }
+    };
+    this.ready = this.send({ base: new URL('./', document.baseURI).href }).then(() => undefined);
+  }
+
+  private send(msg: Record<string, unknown>): Promise<any> {
+    const id = this.next++;
+    return new Promise((resolve, reject) => {
+      this.pending.set(id, (out) => {
+        const v = JSON.parse(out);
+        if (v && typeof v === 'object' && 'error' in v) reject(new EngineError(v.error));
+        else resolve(v);
+      });
+      this.worker.postMessage({ id, ...msg });
+    });
+  }
+
+  call<T = any>(cmd: string, args: Record<string, unknown> = {}): Promise<T> {
+    return this.ready.then(() => this.send({ cmd: { cmd, ...args } }));
+  }
+
+  query<T = any>(kind: string, args: Record<string, unknown> = {}): Promise<T> {
+    return this.call<T>('query', { kind, ...args });
+  }
+}

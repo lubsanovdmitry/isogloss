@@ -1,0 +1,82 @@
+:root {
+  /* Atlas paper and iron-gall ink */
+  --paper: #eef1f3;
+  --paper-raised: #f7f8f9;
+  --ink: #1e2742;
+  --ink-soft: #4a5672;
+  --rule: #9aa6b2;
+  --rule-faint: #d5dbe1;
+  --sea: #cbd8e1;
+  --river: #5b7fa3;
+  --isogloss: #b42318;
+  --focus: #2f5bd3;
+
+  --serif: 'Gentium Plus', 'Gentium', 'Charis SIL', 'Doulos SIL', serif;
+  --sans: 'Public Sans', system-ui, sans-serif;
+
+  /* Type scale (1.2 minor third) */
+  --t-xs: 0.78rem;
+  --t-sm: 0.875rem;
+  --t-md: 1rem;
+  --t-lg: 1.2rem;
+  --t-xl: 1.44rem;
+  --t-2xl: 1.728rem;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #151b2b;
+    --paper-raised: #1c2336;
+    --ink: #e6e9ef;
+    --ink-soft: #a9b2c4;
+    --rule: #5d6a80;
+    --rule-faint: #2b3449;
+    --sea: #1f3044;
+    --river: #7aa0c4;
+    --isogloss: #f0624d;
+    --focus: #8fb0ff;
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; height: 100%; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: var(--t-md);
+  line-height: 1.45;
+}
+
+button, input, select, textarea { font: inherit; color: inherit; }
+
+button {
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 0.3rem 0.7rem;
+  cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: var(--ink); }
+button:disabled { opacity: 0.5; cursor: default; }
+button.primary { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+input, select, textarea {
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 0.25rem 0.45rem;
+}
+
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.ipa { font-family: var(--serif); font-size: 1.08em; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
