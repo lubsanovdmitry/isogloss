@@ -346,10 +346,12 @@ func (c *Clause) Apply(w phon.Word, ph *phon.Phonotactics) (phon.Word, bool) {
 		if at == 0 || at >= len(out.Segs) {
 			continue
 		}
-		if k := len(out.Bounds); k > 0 && out.Bounds[k-1] == (phon.Boundary{At: at, Kind: b.Kind}) {
+		nb := b
+		nb.At = at
+		if k := len(out.Bounds); k > 0 && out.Bounds[k-1] == nb {
 			continue
 		}
-		out.Bounds = append(out.Bounds, phon.Boundary{At: at, Kind: b.Kind})
+		out.Bounds = append(out.Bounds, nb)
 	}
 	phon.CleanStress(&out, ph)
 	if out.Equal(w) { // compares segments including stress and tone

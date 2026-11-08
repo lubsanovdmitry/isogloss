@@ -74,7 +74,10 @@ func TestRomanceCalibration(t *testing.T) {
 	for _, p := range [][2]string{{"spa", "por"}, {"spa", "ita"}, {"spa", "ron"}, {"spa", "fra"}, {"ita", "ron"}, {"por", "fra"}} {
 		raw, n := pairSim(forms, p[0], p[1])
 		is := InventorySim(inv[p[0]], inv[p[1]])
-		intel := fx.Q16((uint64(m.Rescale(raw))*uint64(m.LexWeight) + uint64(is)*uint64(m.InvWeight)) / 1000)
+		// No paradigms in the word lists: inflected forms are taken to be as
+		// similar as words, and Romance word order agrees on all parameters.
+		l := uint64(m.Rescale(raw))
+		intel := fx.Q16((l*uint64(m.LexWeight+m.MorphWeight) + uint64(is)*uint64(m.InvWeight) + uint64(fx.One)*uint64(m.OrderWeight)) / 1000)
 		score[p[0]+"-"+p[1]] = intel
 		t.Logf("%s–%s: raw %d‰, inventory %d‰, intel %d‰ over %d concepts", p[0], p[1], raw.Permille(), is.Permille(), intel.Permille(), n)
 	}

@@ -30,6 +30,9 @@ type Config struct {
 	Threshold uint32
 	// HomelandRadius: hexes around the homeland settled at tick 0.
 	HomelandRadius int32
+	// GramRate, AnalogyRate, OrderRate scale grammaticalization steps,
+	// analogical levelling and word-order drift (1000 = default).
+	GramRate, AnalogyRate, OrderRate uint32
 }
 
 // DefaultConfig returns the standard configuration.
@@ -43,6 +46,9 @@ func DefaultConfig() Config {
 		SmallBias:      500,
 		LargeBias:      500,
 		HomelandRadius: 1,
+		GramRate:       1000,
+		AnalogyRate:    1000,
+		OrderRate:      1000,
 	}
 }
 
@@ -216,6 +222,9 @@ func (s *Sim) Step() {
 	s.propose()            // 4
 	s.spread()             // 5, 6, 7 (apply includes repair)
 	s.diffuse()
+	if s.Tick%4 == 0 {
+		s.sweepMemo()
+	}
 	if s.Tick%s.Cfg.ClusterEvery == 0 { // 10
 		s.cluster()
 	}
@@ -319,8 +328,7 @@ func (s *Sim) spread() {
 	kept := s.live[:0]
 	for _, l := range s.live {
 		if l.age >= l.in.Life && (!l.wave.Alive() || l.age > l.in.Life+8) {
-			s.ap.Forget(l.in.ID)
-			continue
+			continue // its memoised results go at the next sweepMemo
 		}
 		kept = append(kept, l)
 	}
@@ -372,6 +380,23 @@ func (s *Sim) Intel(a, b *lex.Variety) fx.Q16 { return s.cl.Intel(a, b) }
 
 // Threshold is the intelligibility at which varieties count as one language.
 func (s *Sim) Threshold() fx.Q16 { return s.cl.Thr }
+
+// sweepMemo keeps memoised rule results only for innovations that are
+// still spreading or diffusing somewhere.
+func (s *Sim) sweepMemo() {
+	keep := map[uint32]bool{}
+	for _, l := range s.live {
+		keep[l.in.ID] = true
+	}
+	for _, c := range s.ByHex {
+		if c != nil {
+			for _, d := range c.Diffusing {
+				keep[d.Innov] = true
+			}
+		}
+	}
+	s.ap.Retain(keep)
+}
 
 // LiveCount returns how many innovations are still spreading.
 func (s *Sim) LiveCount() int { return len(s.live) }

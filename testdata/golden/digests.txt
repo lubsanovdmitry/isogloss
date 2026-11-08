@@ -1,4 +1,4 @@
 # seed	digest after 40 ticks (DefaultConfig). Regenerate: make golden-update
-1	ed3fc8b50fa2aab8
-42	118c25fb528a8bd5
-1337	e33a05a837c94904
+1	6f893fee620d4972
+42	e34d949d4160dc1b
+1337	86de745cfc5f0f15

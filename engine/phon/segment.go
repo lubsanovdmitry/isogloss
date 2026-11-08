@@ -131,11 +131,19 @@ func (b BoundaryKind) Rune() rune {
 	return '#'
 }
 
-// Boundary sits before segment index At.
+// Boundary sits before segment index At. Tag identifies the inflectional
+// slot whose exponent the boundary delimits (0 = untagged, e.g. inside a
+// compound); TagPrefix marks a prefix's boundary (after the prefix), else it
+// is a suffix's (before the suffix). Tags let paradigms find the stem after
+// sound changes have worn the affixes down.
 type Boundary struct {
 	At   int
 	Kind BoundaryKind
+	Tag  uint8
 }
+
+// TagPrefix is set in Boundary.Tag for prefix boundaries.
+const TagPrefix = 0x80
 
 // Span is a half-open segment range [Start, End) with its nucleus index.
 type Span struct {

@@ -174,6 +174,7 @@ func GenerateProto(r *rng.Stream) *Proto {
 		}
 		v.Set(c.ID, Lexeme{Concept: c.ID, Form: w, Freq: c.Freq, Stratum: Native, Etym: ProtoRoot(c.ID), Hash: FormHash(w)})
 	}
+	p.genMorph(rng.New(r.Uint64(), rng.Key("morph")))
 	v.Key = 0x1505
 	return p
 }

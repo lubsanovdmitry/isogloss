@@ -3,6 +3,7 @@ package lex
 import (
 	"slices"
 
+	"isogloss/engine/morph"
 	"isogloss/engine/phon"
 )
 
@@ -64,6 +65,7 @@ type Variety struct {
 	Stress   phon.StressRule
 	Repair   phon.RepairMode
 	Epenth   phon.Segment
+	M        morph.State // exponents, word order, tracked paradigms
 
 	// Vacated lists phonemes the most recent sound change removed, so a
 	// change moving a neighbour into the gap can be boosted (chain shifts).
@@ -72,6 +74,7 @@ type Variety struct {
 
 	counts []segCount        // phoneme occurrence counts, sorted by features
 	inv    []phon.FeatureSet // cached inventory
+	prod   [2][]prodPattern  // cached productive affixes per part of speech
 }
 
 // Derive returns a mutable copy of v with entry e appended to its history.
@@ -85,6 +88,8 @@ func (v *Variety) Derive(e Entry) *Variety {
 		Stress:   v.Stress,
 		Repair:   v.Repair,
 		Epenth:   v.Epenth,
+		M:        v.M.Clone(),
+		prod:     v.prod, // valid until a paradigm changes (SetPara)
 		Vacated:  v.Vacated,
 		VacTick:  v.VacTick,
 		counts:   slices.Clone(v.counts),
@@ -148,7 +153,7 @@ func FormHash(w phon.Word) uint64 {
 		h = mix(h, s.F.Mask^uint64(s.Tone)<<58^uint64(s.Stress)<<61)
 	}
 	for _, b := range w.Bounds {
-		h = mix(h, uint64(b.At)<<8|uint64(b.Kind))
+		h = mix(h, uint64(b.At)<<8|uint64(b.Kind)|uint64(b.Tag)<<16)
 	}
 	return h
 }

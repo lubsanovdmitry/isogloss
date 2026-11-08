@@ -14,6 +14,7 @@ import (
 
 	"isogloss/engine/history"
 	"isogloss/engine/lex"
+	"isogloss/engine/morph"
 	"isogloss/engine/render"
 	"isogloss/engine/sim"
 )
@@ -126,6 +127,7 @@ func parseFlagsAnywhere(fs *flag.FlagSet, args []string) []string {
 func runEtym(args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("etym", flag.ExitOnError)
 	langName := fs.String("lang", "", "only this language")
+	form := fs.String("form", "", "an inflected form (paradigm cell such as PL or PST.3SG)")
 	pos := parseFlagsAnywhere(fs, args)
 	if len(pos) != 2 {
 		usage()
@@ -151,6 +153,12 @@ func runEtym(args []string, out io.Writer) error {
 			continue
 		}
 		found = true
+		if *form != "" {
+			if err := printCellEtym(out, s, l, c, *form); err != nil {
+				return err
+			}
+			continue
+		}
 		e, _ := render.EtymOf(s, l.Centre, c)
 		fmt.Fprintln(out, e.Text())
 	}
@@ -194,6 +202,74 @@ func runExport(args []string, out io.Writer) error {
 			return err
 		}
 		fmt.Fprintf(out, "wrote %s\n", *csv)
+	}
+	return nil
+}
+
+func printCellEtym(out io.Writer, s *sim.Sim, l *sim.Language, c lex.ConceptID, form string) error {
+	i := lex.TrackedIndex(c)
+	if i < 0 {
+		return fmt.Errorf("%q has no stored paradigm; try one of the frequent nouns or verbs", lex.Concepts()[c].Label)
+	}
+	pos := lex.Tracked()[i].POS
+	k := -1
+	var labels []string
+	for j, cell := range morph.Cells(pos) {
+		labels = append(labels, cell.Label)
+		if strings.EqualFold(cell.Label, form) {
+			k = j
+		}
+	}
+	if k < 0 {
+		return fmt.Errorf("no form %q for a %s (forms: %s)", form, pos, strings.Join(labels, " "))
+	}
+	var e struct {
+		Form, Gloss, Proto, ProtoGloss, ProtoLang, Lang, BaseLabel, Base string
+		Irregular                                                        bool
+		Steps                                                            []struct {
+			Tick                 int
+			Label, Before, After string
+		}
+	}
+	if err := json.Unmarshal(render.CellEtymJSON(s, l.Centre, c, k), &e); err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "%s  '%s'  %s  %s\n  < *%s  %s  %s\n", e.Form, lex.Concepts()[c].Label, e.Gloss, e.Lang, e.Proto, e.ProtoLang, e.ProtoGloss)
+	for _, st := range e.Steps {
+		fmt.Fprintf(out, "  t%-3d %-44s *%s → %s\n", st.Tick, st.Label, st.Before, st.After)
+	}
+	if e.Base != "" {
+		note := ""
+		if e.Irregular {
+			note = " (this form is irregular)"
+		}
+		fmt.Fprintf(out, "  cf. %s %s%s\n", e.BaseLabel, e.Base, note)
+	}
+	fmt.Fprintln(out)
+	return nil
+}
+
+func runGrammar(args []string, out io.Writer) error {
+	fs := flag.NewFlagSet("grammar", flag.ExitOnError)
+	langName := fs.String("lang", "", "only this language")
+	pos := parseFlagsAnywhere(fs, args)
+	if len(pos) != 1 {
+		usage()
+	}
+	s, err := loadRun(pos[0])
+	if err != nil {
+		return err
+	}
+	found := false
+	for _, l := range s.LivingLanguages() {
+		if *langName != "" && !strings.EqualFold(l.Name, *langName) {
+			continue
+		}
+		found = true
+		fmt.Fprintln(out, render.GrammarMarkdown(s, l.ID))
+	}
+	if !found {
+		return fmt.Errorf("no living language named %q", *langName)
 	}
 	return nil
 }

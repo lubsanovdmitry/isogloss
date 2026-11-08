@@ -88,3 +88,39 @@ func TestCorrespondences(t *testing.T) {
 	}
 	t.Log(langs)
 }
+
+func TestGrammarViews(t *testing.T) {
+	s := sim.New(1001, sim.DefaultConfig())
+	s.Run(40)
+	l := s.LivingLanguages()[0]
+	valid(t, "sketch", SketchJSON(s, l.ID))
+	fire, _ := lex.ConceptByLabel("fire")
+	valid(t, "paradigm", ParadigmJSON(s, l.ID, fire))
+	valid(t, "celletym", CellEtymJSON(s, l.Centre, fire, 1))
+	b := FableJSON(s)
+	valid(t, "fable", b)
+	var f struct {
+		English []string
+		Langs   []struct {
+			Name  string
+			Order string
+			Lines [][]struct{ F, G string }
+		}
+	}
+	if err := json.Unmarshal(b, &f); err != nil {
+		t.Fatal(err)
+	}
+	for _, lang := range f.Langs[:min(3, len(f.Langs))] {
+		t.Logf("%s (%s)", lang.Name, lang.Order)
+		for i, line := range lang.Lines[:4] {
+			var a, g []string
+			for _, w := range line {
+				n := max(len([]rune(w.F)), len([]rune(w.G)))
+				a = append(a, w.F+strings.Repeat(" ", n-len([]rune(w.F))))
+				g = append(g, w.G+strings.Repeat(" ", n-len([]rune(w.G))))
+			}
+			t.Logf("  %s\n    %s\n    '%s'", strings.Join(a, "  "), strings.Join(g, "  "), f.English[i])
+		}
+	}
+	t.Logf("%s", CellEtymJSON(s, l.Centre, fire, 1))
+}

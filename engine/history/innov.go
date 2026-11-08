@@ -5,6 +5,7 @@ package history
 
 import (
 	"isogloss/engine/lex"
+	"isogloss/engine/morph"
 	"isogloss/engine/phon"
 	"isogloss/engine/rules"
 )
@@ -36,6 +37,22 @@ type LexChange struct {
 	How     string // "shift from 'tree'", "compound 'water'+'big'", "new root"
 }
 
+// GramChange moves a slot's exponent one stage along the grammaticalization
+// cycle. It applies only where the variety's exponent is at the previous
+// stage with the same source (neighbours may have gone another way).
+type GramChange struct {
+	Slot   morph.Slot
+	To     morph.Stage // Periphrasis (a source is recruited), Fixed, Clitic or Affix
+	Source int32       // concept ID, or -1 for an inherited exponent
+	Prefix bool        // Periphrasis: the construction precedes its host
+}
+
+// OrderChange sets a word-order parameter.
+type OrderChange struct {
+	Param morph.Param
+	Value uint8
+}
+
 // Innovation is one change, born in one community, spreading by the wave
 // model. IDs start at 1 and index Registry.
 type Innovation struct {
@@ -50,6 +67,9 @@ type Innovation struct {
 	Diffuse  string // "", "freq-first", "rare-first"
 	Stress   int8   // -1, or the phon.StressRule this change installs
 	Lex      *LexChange
+	Gram     *GramChange
+	Target   lex.ConceptID // Morph: the lexeme analogy regularizes
+	Order    *OrderChange
 	Rate     int32 // local logistic growth rate, signed Q16
 	Life     int32 // ticks during which the innovation actively spreads
 	Forced   bool
@@ -71,6 +91,12 @@ func (in *Innovation) Label() string {
 		return in.Template
 	case Lexical:
 		return "new word for '" + lex.Concepts()[in.Lex.Concept].Label + "' (" + in.Lex.How + ")"
+	case Gram:
+		return in.Gram.Label()
+	case Morph:
+		return "analogy regularizes '" + lex.Concepts()[in.Target].Label + "'"
+	case Order:
+		return in.Order.Param.Name() + " becomes " + in.Order.Param.Values()[in.Order.Value]
 	}
 	return in.Kind.String()
 }
@@ -96,4 +122,28 @@ type Root struct {
 	Tick   int32
 	Origin int32
 	How    string
+}
+
+// Label describes a grammaticalization step.
+func (g *GramChange) Label() string {
+	info := g.Slot.Info()
+	src := "an old marker"
+	if g.Source >= 0 {
+		src = "'" + lex.Concepts()[g.Source].Label + "'"
+	}
+	switch g.To {
+	case morph.Periphrasis:
+		return src + " starts to mark the " + info.Name
+	case morph.Fixed:
+		return "the " + info.Name + " with " + src + " becomes a fixed construction"
+	case morph.Clitic:
+		return "the " + info.Name + " marker " + src + " becomes a clitic"
+	case morph.Affix:
+		side := "suffix"
+		if g.Prefix {
+			side = "prefix"
+		}
+		return "the " + info.Name + " clitic " + src + " becomes a " + side
+	}
+	return "grammatical change"
 }

@@ -1,6 +1,6 @@
 # What remains
 
-Status as of 2026-11-08: **M0 and M1 are done** (gates met; see
+Status as of 2026-11-08: **M0, M1 and M2 are done** (gates met; see
 [IMPLEMENTATION.md](IMPLEMENTATION.md)). This list is ordered by when it is
 needed.
 
@@ -18,16 +18,23 @@ needed.
 - [ ] Watch `npm audit`: low-severity `deepmerge` advisory via `@sveltejs/vite-plugin-svelte` (dev-only, no fix upstream yet).
 - [x] Seed sweep (`TestSeedSweep`, 16 seeds): median 5 languages (2–10), median core retention 787‰. Knobs left as they were.
 
-## M2 · Grammar
+## M2 · Grammar (done)
 
-- [ ] `engine/morph`: categories (noun number/case/definiteness; verb TAM, mood, agreement), exponents (free word, clitic, prefix, suffix, stem change, zero).
-- [ ] Paradigm cells built as stem + exponents with `+`/`=` boundaries so sound rules cross them (rule engine already supports boundaries).
-- [ ] Grammaticalization cycle (6 stages) as innovations (`history.Gram`), with Heine & Kuteva paths over the gram concepts already in the lexicon.
-- [ ] Analogy: levelling and extension, probability ∝ 1/frequency.
-- [ ] Word-order parameters with WALS priors and correlations (`engine/data/wals.tsv` is already generated) and harmonic drift.
-- [ ] Typology metrics (synthesis, fusion, irregularity).
-- [ ] Views: paradigms (irregular cells highlighted), parallel texts from abstract trees, grammar sketch (extend `render.LangJSON`).
-- [ ] Gate: irregular paradigms emerge in seeded runs (test: stem allomorphy in a frequent lexeme).
+- [x] `engine/morph`: 16 slots, six stages, cells with tagged boundaries, WALS word order.
+- [x] Grammaticalization as spreading innovations; loss detected by syncretism; renewal.
+- [x] Analogy (levelling + extension to the productive pattern), rate ∝ 1/frequency.
+- [x] Harmonic word-order drift; case loss pushes toward SVO.
+- [x] Typology metrics; views: paradigms, grammar sketch, parallel text, inflected-form etymologies; `isogloss grammar` Markdown export.
+- [x] Gate: `TestIrregularParadigmsEmerge`.
+
+### M2 follow-ups
+
+- [ ] Some inventories show two segments with the same symbol (e.g. two "ʔ"): distinct feature bundles render alike. Make `RenderFeatures` disambiguate, or merge near-identical bundles.
+- [ ] Only 3SG cells exist for future, perfect and progressive; the parallel text uses them for every person.
+- [ ] Definiteness is not crossed with case in stored cells (the parallel text attaches a bound article outside the case form).
+- [ ] Periphrastic auxiliaries are rendered uninflected.
+- [ ] Performance: analogy and inflected cells doubled the cost of a run (0.8 → 1.6 s native on one core; 3.7–4.0 s in the browser). Ideas: cheaper productive-pattern updates, sampling cells in `MorphSim`.
+- [ ] Full syncretism (loss) is rare within 1000 years; check the 75% threshold against real attrition rates.
 
 ## M3 · Meaning and contact
 

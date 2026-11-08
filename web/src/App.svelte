@@ -9,6 +9,7 @@
   import RulePanel from './lib/RulePanel.svelte';
   import Chronicle from './lib/Chronicle.svelte';
   import IntelPanel from './lib/IntelPanel.svelte';
+  import FablePanel from './lib/FablePanel.svelte';
   import WaveChart from './lib/WaveChart.svelte';
 
   const engine = new Engine();
@@ -21,7 +22,9 @@
   let seed = $state('42');
   let selected = $state(-1);
   let concept = $state('water');
-  let tab = $state<'tree' | 'word' | 'table' | 'intel' | 'lang' | 'rules' | 'log'>('tree');
+  let tab = $state<'tree' | 'word' | 'table' | 'intel' | 'lang' | 'fable' | 'rules' | 'log'>('tree');
+  let cell = $state(-1); // paradigm cell shown in Word history (-1 = dictionary form)
+  let cells = $state<Record<string, string[]>>({});
   let running = $state(false);
   let speed = $state(2); // ticks per second
   let busy = $state(false);
@@ -164,12 +167,13 @@
 
   onMount(async () => {
     concepts = await engine.query<Concept[]>('concepts');
+    cells = await engine.query<Record<string, string[]>>('cells');
     await newRun();
   });
 
   const tabs = [
     ['tree', 'Family tree'], ['word', 'Word history'], ['table', 'Word lists'], ['intel', 'Intelligibility'],
-    ['lang', 'Sound system'], ['rules', 'Change rules'], ['log', 'Chronicle'],
+    ['lang', 'Grammar'], ['fable', 'Parallel text'], ['rules', 'Change rules'], ['log', 'Chronicle'],
   ] as const;
 </script>
 
@@ -246,15 +250,19 @@
             <ul class="tree"><TreeItem node={nodes.get(0)!} {nodes} langs={snap.langs} proto={snap.proto}
               onlang={(id) => { focusLang = id; tab = 'lang'; }} oninnov={showInnov} /></ul>
           {/if}
-          <p class="hint">Subgroups are defined by the sound changes all their members share, as in the comparative method. Click a change to draw its isogloss.</p>
+          <p class="hint">Subgroups are defined by the changes all their members share (sounds, grammar, word order), as in the comparative method. Click a change to draw its isogloss.</p>
         {:else if tab === 'word'}
-          <WordPanel {engine} hex={selected} tick={snap.tick} {concepts} {concept} onconcept={(c) => (concept = c)} />
+          <WordPanel {engine} hex={selected} tick={snap.tick} {concepts} {concept} {cell} {cells}
+            onconcept={(c) => { concept = c; cell = -1; }} oncell={(k) => (cell = k)} />
         {:else if tab === 'table'}
-          <TablePanel {engine} tick={snap.tick} onpick={(c) => { concept = c; tab = 'word'; }} />
+          <TablePanel {engine} tick={snap.tick} onpick={(c) => { concept = c; cell = -1; tab = 'word'; }} />
         {:else if tab === 'intel'}
           <IntelPanel {engine} tick={snap.tick} onlang={(id) => { focusLang = id; tab = 'lang'; }} />
         {:else if tab === 'lang'}
-          <LangPanel {engine} lang={shownLang} tick={snap.tick} oninnov={showInnov} />
+          <LangPanel {engine} lang={shownLang} tick={snap.tick} oninnov={showInnov}
+            oncell={(c, k) => { concept = c; cell = k; if (selected < 0 || langOf[selected] !== shownLang) selected = living.find((l) => l.id === shownLang)?.centre ?? selected; tab = 'word'; }} />
+        {:else if tab === 'fable'}
+          <FablePanel {engine} tick={snap.tick} onlang={(id) => { focusLang = id; tab = 'lang'; }} />
         {:else if tab === 'rules'}
           <RulePanel {engine} hex={selected} onscheduled={(m) => (status = m)} />
         {:else}

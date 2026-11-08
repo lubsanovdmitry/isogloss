@@ -23,7 +23,9 @@ import (
 func usage() {
 	fmt.Fprintln(os.Stderr, `usage:
   isogloss run [--seed N] [--ticks N] [--out run.json]   simulate and save a run
-  isogloss etym RUN.json CONCEPT [--lang NAME]          trace a word's history
+  isogloss etym RUN.json CONCEPT [--lang NAME] [--form CELL]
+                                                        trace a word's history (CELL: PL, PST.3SG…)
+  isogloss grammar RUN.json [--lang NAME]               Markdown grammar sketches
   isogloss export (--cldf DIR | --csv FILE) RUN.json    export word lists
   isogloss sca [-trace] RULES.isg WORDS.txt             apply sound changes to a word list
                                                         (template classes such as stop, nasal are predefined)`)
@@ -44,6 +46,8 @@ func main() {
 		err = runEtym(os.Args[2:], os.Stdout)
 	case "export":
 		err = runExport(os.Args[2:], os.Stdout)
+	case "grammar":
+		err = runGrammar(os.Args[2:], os.Stdout)
 	default:
 		usage()
 	}

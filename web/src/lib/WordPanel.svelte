@@ -1,18 +1,30 @@
 <script lang="ts">
-  import type { Concept, Engine, Etym } from './engine';
+  import type { CellEtym, Concept, Engine, Etym } from './engine';
+  import Gloss from './Gloss.svelte';
 
-  interface Props { engine: Engine; hex: number; tick: number; concepts: Concept[]; concept: string; onconcept: (c: string) => void }
-  let { engine, hex, tick, concepts, concept, onconcept }: Props = $props();
+  interface Props {
+    engine: Engine; hex: number; tick: number; concepts: Concept[]; concept: string;
+    cell: number; cells: Record<string, string[]>;
+    onconcept: (c: string) => void; oncell: (k: number) => void;
+  }
+  let { engine, hex, tick, concepts, concept, cell, cells, onconcept, oncell }: Props = $props();
   let etym = $state<Etym | null>(null);
+  let cet = $state<CellEtym | null>(null);
   let error = $state('');
 
+  const pos = $derived(concepts.find((c) => c.label === concept)?.pos);
+  const forms = $derived(pos ? cells[pos] ?? [] : []);
+  const useCell = $derived(pos !== undefined && cell >= 0 && cell < forms.length);
+
   $effect(() => {
-    const h = hex, c = concept;
+    const h = hex, c = concept, k = cell, inflected = useCell;
     void tick;
-    if (h < 0) { etym = null; return; }
-    engine.query<Etym>('word', { hex: h, label: c })
-      .then((e) => { etym = e; error = ''; })
-      .catch((e) => { etym = null; error = String(e.message ?? e); });
+    if (h < 0) { etym = null; cet = null; return; }
+    const q = inflected ? engine.query<CellEtym>('cell', { hex: h, label: c, cell: k }) : engine.query<Etym>('word', { hex: h, label: c });
+    q.then((e: any) => {
+      if (inflected) { cet = e; etym = null; } else { etym = e; cet = null; }
+      error = '';
+    }).catch((e) => { etym = null; cet = null; error = String(e.message ?? e); });
   });
 </script>
 
@@ -22,6 +34,13 @@
   <datalist id="concept-list">
     {#each concepts as c (c.id)}<option value={c.label}>{c.gloss}</option>{/each}
   </datalist>
+  {#if forms.length}
+    <label for="form">Form</label>
+    <select id="form" value={useCell ? cell : -1} onchange={(e) => oncell(+e.currentTarget.value)}>
+      <option value={-1}>dictionary form</option>
+      {#each forms as f, k (k)}<option value={k}>{f}</option>{/each}
+    </select>
+  {/if}
 </div>
 
 {#if hex < 0}
@@ -45,10 +64,30 @@
     <p class="root">Root: {etym.root}</p>
     {#if etym.steps.length === 0}<p class="hint">No change yet: the word is still as it was in {etym.protoLang}.</p>{/if}
   </article>
+{:else if cet}
+  <article>
+    <h2><span class="ipa">{cet.form}</span> <span class="gloss">‘{cet.concept}’, {cet.cell}</span></h2>
+    <p class="lang">{cet.lang ?? ''}, hex {hex} · <Gloss text={cet.gloss} /></p>
+    <ol>
+      <li class="origin"><span class="t"></span><span class="what">{cet.protoLang} <Gloss text={cet.protoGloss} /></span><span class="ipa">*{cet.proto}</span></li>
+      {#each cet.steps as s, i (i)}
+        <li class:gram={s.label.includes('clitic') || s.label.includes('suffix') || s.label.includes('prefix')} class:analogy={s.label.startsWith('analogy')}>
+          <span class="t">{s.tick * 25} yrs</span>
+          <span class="what">{s.label}</span>
+          <span class="ipa">{i < cet.steps.length - 1 ? '*' : ''}{s.after}</span>
+        </li>
+      {/each}
+    </ol>
+    {#if cet.base}<p class="root">cf. {cet.baseLabel} <span class="ipa">{cet.base}</span>{cet.irregular ? ': this form is irregular' : ''}.</p>{/if}
+    {#if cet.irregular}
+      <p class="root">Analogy {cet.freq <= 2 ? 'has so far spared it: frequent words resist levelling' : 'may yet level it: rare words are regularized first'} (frequency class {cet.freq}).</p>
+    {/if}
+    {#if cet.steps.length === 0}<p class="hint">Unchanged since {cet.protoLang}.</p>{/if}
+  </article>
 {/if}
 
 <style>
-  .bar { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem; }
+  .bar { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
   label { font-size: var(--t-sm); color: var(--ink-soft); }
   h2 { font-family: var(--serif); font-weight: 400; font-size: var(--t-2xl); margin: 0; }
   .gloss { font-size: var(--t-lg); color: var(--ink-soft); }
@@ -56,6 +95,8 @@
   ol { list-style: none; padding: 0; margin: 0; }
   li { display: grid; grid-template-columns: 4.5rem 1fr auto; gap: 0.75rem; padding: 0.3rem 0; border-bottom: 1px solid var(--rule-faint); align-items: baseline; }
   li.repair .what { color: var(--ink-soft); font-style: italic; }
+  li.gram .what { font-weight: 600; }
+  li.analogy .what { font-style: italic; }
   .t { color: var(--ink-soft); font-size: var(--t-sm); font-variant-numeric: tabular-nums; }
   .origin .what { font-style: italic; }
   .root { color: var(--ink-soft); font-size: var(--t-sm); }

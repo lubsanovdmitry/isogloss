@@ -7,6 +7,7 @@ import (
 
 	"isogloss/engine/history"
 	"isogloss/engine/lex"
+	"isogloss/engine/morph"
 	"isogloss/engine/phon"
 	"isogloss/engine/sim"
 	"isogloss/engine/tmpl"
@@ -61,10 +62,10 @@ func SnapshotJSON(s *sim.Sim, sinceEvent int) []byte {
 		j.EndArr().KI("shared", int64(len(n.Shared))).K("defining").Arr()
 		for _, id := range n.Defining {
 			in := s.Reg.Get(id)
-			if in.Kind != history.Sound {
+			if !structural(in) {
 				continue
 			}
-			j.Obj().KU("id", uint64(id)).KS("label", in.Label()).End()
+			j.Obj().KU("id", uint64(id)).KS("label", in.Label()).KS("kind", in.Kind.String()).End()
 		}
 		j.EndArr().KI("definingLex", int64(len(n.Defining))).End()
 	}
@@ -281,13 +282,17 @@ func LangJSON(s *sim.Sim, id int32) []byte {
 			continue
 		}
 		in := s.Reg.Get(e.Innov)
-		if in.Kind != history.Sound || e.Lo != e.Hi && !(e.Lo == 1 && e.Hi == 5) {
+		if !structural(in) || e.Lo != e.Hi && !(e.Lo == 1 && e.Hi == 5) {
 			continue
 		}
 		if e.Lo == e.Hi && e.Lo != 1 && e.Lo != 5 {
 			continue // diffusion extension steps
 		}
-		j.Obj().KI("tick", int64(e.Tick)).KU("innov", uint64(in.ID)).KS("label", in.Label()).KS("rule", in.Src).End()
+		if in.Kind == history.Gram && !gramTook(v, in) {
+			continue // adopted, but the variety had gone another way
+		}
+		j.Obj().KI("tick", int64(e.Tick)).KU("innov", uint64(in.ID)).KS("label", in.Label()).KS("rule", in.Src).
+			KS("kind", in.Kind.String()).End()
 	}
 	j.EndArr()
 	var lexCount int
@@ -398,9 +403,28 @@ func ConceptsJSON() []byte {
 	j.Arr()
 	for _, c := range lex.Concepts() {
 		j.Obj().KI("id", int64(c.ID)).KS("label", c.Label).KS("gloss", c.Gloss).KB("core", c.Core()).
-			KS("field", c.Field).End()
+			KS("field", c.Field)
+		if i := lex.TrackedIndex(c.ID); i >= 0 {
+			j.KS("pos", lex.Tracked()[i].POS.String())
+		}
+		j.End()
 	}
 	j.EndArr()
+	return j.Bytes()
+}
+
+// CellsJSON lists paradigm cell labels per part of speech.
+func CellsJSON() []byte {
+	var j JSON
+	j.Obj()
+	for _, p := range []morph.POS{morph.Noun, morph.Verb} {
+		j.K(p.String()).Arr()
+		for _, c := range morph.Cells(p) {
+			j.S(c.Label)
+		}
+		j.EndArr()
+	}
+	j.End()
 	return j.Bytes()
 }
 
@@ -423,4 +447,17 @@ func IntelJSON(s *sim.Sim) []byte {
 	}
 	j.EndArr().End()
 	return j.Bytes()
+}
+
+// structural reports changes that define subgroups: sound changes,
+// grammaticalization steps and word-order changes (not single words).
+func structural(in *history.Innovation) bool {
+	return in.Kind == history.Sound || in.Kind == history.Gram || in.Kind == history.Order
+}
+
+// gramTook reports whether a grammaticalization step is reflected in v (its
+// slot has reached at least that stage with that source).
+func gramTook(v *lex.Variety, in *history.Innovation) bool {
+	e := v.M.Exp[in.Gram.Slot]
+	return e.Source == in.Gram.Source && e.Stage >= in.Gram.To
 }

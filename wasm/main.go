@@ -9,7 +9,7 @@
 //	step     {n, since}                  advance n ticks; returns snapshot
 //	snapshot {since}
 //	intervene{rule, hex}                 schedule a rule for the next tick
-//	query    {kind, ...}                 compare | corresp | intel | lang | word | innov | innovs | preview | frames | concepts
+//	query    {kind, ...}                 compare | corresp | intel | lang | sketch | paradigm | cell | fable | word | innov | innovs | preview | frames | concepts
 //	save                                 returns the save (seed, tick, interventions)
 //	load     {save}                      replay a save
 //	fork     {tick}                      replay this run truncated at tick
@@ -161,6 +161,9 @@ func query(q js.Value) string {
 	if kind == "concepts" {
 		return string(render.ConceptsJSON())
 	}
+	if kind == "cells" {
+		return string(render.CellsJSON())
+	}
 	if cur == nil {
 		return errJSON("no run")
 	}
@@ -187,6 +190,19 @@ func query(q js.Value) string {
 		return string(render.InnovListJSON(cur, num(q, "min", 3)))
 	case "preview":
 		return string(render.PreviewJSON(cur, int32(num(q, "hex", -1)), str(q, "rule")))
+	case "sketch":
+		return string(render.SketchJSON(cur, int32(num(q, "id", -1))))
+	case "paradigm":
+		c, _ := lex.ConceptByLabel(str(q, "label"))
+		return string(render.ParadigmJSON(cur, int32(num(q, "lang", -1)), c))
+	case "cell":
+		c, ok := lex.ConceptByLabel(str(q, "label"))
+		if !ok {
+			return errJSON("no such word")
+		}
+		return string(render.CellEtymJSON(cur, int32(num(q, "hex", -1)), c, num(q, "cell", 0)))
+	case "fable":
+		return string(render.FableJSON(cur))
 	case "corresp":
 		return string(render.CorrespondencesJSON(cur, num(q, "min", 2)))
 	case "intel":

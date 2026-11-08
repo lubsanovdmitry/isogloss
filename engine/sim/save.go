@@ -96,6 +96,7 @@ func (s *Sim) applyInterventions() {
 		}
 		in.Origin, in.Tick = origin, s.Tick
 		s.Reg.Add(in)
+		s.ap.Track(in.ID)
 		l := &liveInnov{in: in, wave: pop.NewWave(len(s.World.Hexes))}
 		s.live = append(s.live, l)
 		targets := []int32{iv.Hex}
@@ -136,6 +137,20 @@ func (s *Sim) Digest() uint64 {
 			l := c.Variety.Lex.At(lex.ConceptID(i))
 			mix(l.Hash)
 			mix(uint64(l.Etym))
+		}
+		m := &c.Variety.M
+		for _, e := range m.Exp {
+			mix(uint64(e.Stage) | uint64(uint32(e.Source))<<8)
+		}
+		for _, o := range m.Order {
+			mix(uint64(o))
+		}
+		for _, p := range m.Para {
+			if p != nil {
+				for _, x := range p.Hash {
+					mix(x)
+				}
+			}
 		}
 	}
 	for _, l := range s.Langs {

@@ -29,7 +29,7 @@
     {/if}
     {#if n > 0}
       <button class="link meta" aria-expanded={open} onclick={() => (open = !open)}>
-        {n} defining sound {n === 1 ? 'change' : 'changes'}
+        {n} defining {n === 1 ? 'change' : 'changes'}
       </button>
     {/if}
   </div>

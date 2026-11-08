@@ -27,6 +27,9 @@ func (s *Sim) newInnov(r *rng.Stream, in *history.Innovation, origin int32) {
 	in.Rate = signedQ16(int32(r.IntN(1000)) - 250) // −0.25 .. 0.75
 	in.Life = 5 + int32(r.IntN(11))
 	s.Reg.Add(in)
+	if in.Kind == history.Sound {
+		s.ap.Track(in.ID)
+	}
 	l := &liveInnov{in: in, wave: pop.NewWave(len(s.World.Hexes))}
 	l.wave.Level[origin] = fx.FromPermille(seedLevelPermille)
 	s.live = append(s.live, l)
@@ -47,6 +50,7 @@ func (s *Sim) propose() {
 				}, c.Hex)
 			}
 		}
+		s.proposeGrammar(r, c)
 		for _, con := range lex.Concepts() {
 			rate := lexRatePer100k[con.Stab] * int(s.Cfg.LexRate) / 1000
 			if con.Taboo {

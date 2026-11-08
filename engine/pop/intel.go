@@ -71,12 +71,15 @@ type Metric struct {
 	// Base is the lexical similarity of unrelated word lists; similarity
 	// at or below Base counts as zero intelligibility.
 	Base fx.Q16
-	// LexWeight and InvWeight (per-mille) mix lexical and inventory terms.
-	LexWeight, InvWeight uint32
+	// LexWeight, InvWeight, MorphWeight and OrderWeight (per-mille, summing
+	// to 1000) mix the core vocabulary, phoneme inventories, inflected forms
+	// and word order.
+	LexWeight, InvWeight, MorphWeight, OrderWeight uint32
 }
 
-// DefaultMetric is calibrated by TestRomanceCalibration.
-var DefaultMetric = Metric{Base: fx.FromPermille(390), LexWeight: 900, InvWeight: 100}
+// DefaultMetric: the lexical scale is calibrated by TestRomanceCalibration;
+// inflection and word order are smaller terms (speakers mostly hear words).
+var DefaultMetric = Metric{Base: fx.FromPermille(390), LexWeight: 750, InvWeight: 100, MorphWeight: 100, OrderWeight: 50}
 
 // LexicalSim averages WordSim over the core (Swadesh) concepts.
 func LexicalSim(a, b *lex.Variety) fx.Q16 {
@@ -128,6 +131,49 @@ func (m Metric) Rescale(l fx.Q16) fx.Q16 {
 	return fx.Div(l-m.Base, fx.One-m.Base)
 }
 
+// MorphSim averages WordSim over a sample of inflected forms (every third
+// paradigm cell of every tracked lexeme). Varieties without paradigms count
+// as identical here.
+func MorphSim(a, b *lex.Variety) fx.Q16 {
+	var sum uint64
+	n := 0
+	for i := range a.M.Para {
+		pa, pb := a.M.Para[i], b.M.Para[i]
+		if pa == nil || pb == nil {
+			continue
+		}
+		if pa == pb {
+			k := (len(pa.Forms) + 1) / 3
+			sum += uint64(k) * uint64(fx.One)
+			n += k
+			continue
+		}
+		for k := 1; k < len(pa.Forms); k += 3 {
+			n++
+			if pa.Hash[k] == pb.Hash[k] {
+				sum += uint64(fx.One)
+				continue
+			}
+			sum += uint64(WordSim(pa.Forms[k].Segs, pb.Forms[k].Segs))
+		}
+	}
+	if n == 0 {
+		return fx.One
+	}
+	return fx.Q16(sum / uint64(n))
+}
+
+// OrderSim is the share of word-order parameters two varieties agree on.
+func OrderSim(a, b *lex.Variety) fx.Q16 {
+	same := 0
+	for p := range a.M.Order {
+		if a.M.Order[p] == b.M.Order[p] {
+			same++
+		}
+	}
+	return fx.FromRatio(uint32(same), uint32(len(a.M.Order)))
+}
+
 // Intel is mutual intelligibility of two varieties in [0, One].
 func (m Metric) Intel(a, b *lex.Variety) fx.Q16 {
 	if a == b || a.Key == b.Key {
@@ -135,7 +181,14 @@ func (m Metric) Intel(a, b *lex.Variety) fx.Q16 {
 	}
 	l := m.Rescale(LexicalSim(a, b))
 	inv := InventorySim(a.Inventory(), b.Inventory())
-	return fx.Q16((uint64(l)*uint64(m.LexWeight) + uint64(inv)*uint64(m.InvWeight)) / 1000)
+	sum := uint64(l)*uint64(m.LexWeight) + uint64(inv)*uint64(m.InvWeight)
+	if m.MorphWeight > 0 {
+		sum += uint64(m.Rescale(MorphSim(a, b))) * uint64(m.MorphWeight)
+	}
+	if m.OrderWeight > 0 {
+		sum += uint64(OrderSim(a, b)) * uint64(m.OrderWeight)
+	}
+	return fx.Q16(sum / 1000)
 }
 
 // Align aligns b to a with the same costs as WordSim and returns, for each
