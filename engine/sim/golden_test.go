@@ -90,7 +90,11 @@ func TestInterventionApplies(t *testing.T) {
 	p, _ := phon.Lookup("p")
 	for _, c := range s.Communities() {
 		for i := 0; i < c.Variety.Lex.Len(); i++ {
-			for _, sg := range c.Variety.Lex.At(lex.ConceptID(i)).Form.Segs {
+			l := c.Variety.Lex.At(lex.ConceptID(i))
+			if l.Etym >= lex.FirstCoinedRoot || l.Stratum.Loan() {
+				continue // new words and loans proposed earlier may bring p back
+			}
+			for _, sg := range l.Form.Segs {
 				if sg.F == p {
 					t.Fatalf("hex %d still has p", c.Hex)
 				}

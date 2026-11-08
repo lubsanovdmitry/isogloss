@@ -110,15 +110,15 @@ func (a *Applier) Apply(v *lex.Variety, e lex.Entry) *lex.Variety {
 		if len(lost) > 0 {
 			nv.Vacated, nv.VacTick = lost, e.Tick
 		}
-	case Lexical:
-		lc := in.Lex
-		if int(lc.Concept) >= nv.Lex.Len() {
-			break
-		}
-		f := finish(lc.Form, &nv.Phonotax, nv.Stress, nv.Repair, nv.Epenth)
-		nv.Set(lc.Concept, lex.Lexeme{Concept: lc.Concept, Form: f, Freq: lc.Freq, Stratum: lex.Native, Etym: lc.Etym, Hash: lex.FormHash(f)})
-		if i := lex.TrackedIndex(lc.Concept); i >= 0 {
-			nv.Reinflect(i) // a new word inflects by the productive pattern
+	case Lexical, Loan:
+		applyLex(nv, in)
+	case Semantic:
+		sc := in.Sem
+		w, sense := nv.Lex.At(sc.Word), nv.Lex.At(sc.Sense)
+		if w.Etym == sc.Etym && sense.Etym != sc.Etym && !sense.Absent() {
+			l := *w
+			l.Also = uint16(sc.Sense) + 1
+			nv.Lex.Set(sc.Word, l) // form unchanged: no inventory recount
 		}
 	case Gram:
 		applyGram(nv, in.Gram, e.Tick)
@@ -131,6 +131,50 @@ func (a *Applier) Apply(v *lex.Variety, e lex.Entry) *lex.Variety {
 	}
 	nv.Invalidate()
 	return nv
+}
+
+// NewForm is the form a lexical change or loan gives its concept in a
+// variety (ok false where it does not apply).
+func NewForm(v *lex.Variety, in *Innovation) (f phon.Word, st lex.Stratum, ok bool) {
+	lc := in.Lex
+	cur := v.Lex.At(lc.Concept)
+	if lc.Gap && !cur.Absent() {
+		return f, st, false
+	}
+	st = lc.Stratum
+	switch {
+	case lc.From >= 0:
+		src := v.Lex.At(lex.ConceptID(lc.From))
+		if !shiftApplies(lc, cur, src) {
+			return f, st, false // the local word has gone another way
+		}
+		return src.Form, src.Stratum, true
+	}
+	// Loans were nativized where they were borrowed and spread as words.
+	f = finish(lc.Form, &v.Phonotax, v.Stress, v.Repair, v.Epenth)
+	if in.Kind == Loan && cur.Etym == lc.Etym && sameSegments(f, cur.Form) {
+		return f, st, false // the loan sounds like the word already used
+	}
+	return f, st, true
+}
+
+func applyLex(nv *lex.Variety, in *Innovation) {
+	lc := in.Lex
+	f, st, ok := NewForm(nv, in)
+	if !ok {
+		return
+	}
+	nv.Set(lc.Concept, lex.Lexeme{Concept: lc.Concept, Form: f, Freq: lc.Freq, Stratum: st, Etym: lc.Etym, Hash: lex.FormHash(f)})
+	if lc.From >= 0 { // the shift is complete: the extra sense is now the word's own
+		if src := nv.Lex.At(lex.ConceptID(lc.From)); src.Also == uint16(lc.Concept)+1 {
+			l := *src
+			l.Also = 0
+			nv.Lex.Set(lex.ConceptID(lc.From), l)
+		}
+	}
+	if i := lex.TrackedIndex(lc.Concept); i >= 0 {
+		nv.Reinflect(i) // a new word inflects by the productive pattern
+	}
 }
 
 // cliticMaterial is what a free word contributes when it cliticizes: its

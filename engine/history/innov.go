@@ -28,13 +28,33 @@ var kindNames = [...]string{"sound", "lexical", "semantic", "morph", "gram", "or
 
 func (k Kind) String() string { return kindNames[k] }
 
-// LexChange replaces a concept's word.
+// LexChange gives a concept a new word: a coinage or meaning shift
+// (Lexical) or a loan (Loan).
 type LexChange struct {
 	Concept lex.ConceptID
-	Form    phon.Word
+	Form    phon.Word // the word as coined or borrowed at the origin
 	Freq    uint8
 	Etym    lex.EtymID
 	How     string // "shift from 'tree'", "compound 'water'+'big'", "new root"
+	// From: for a meaning shift, the concept whose word takes over; each
+	// adopting variety uses its own form of that word. -1 otherwise.
+	From int32
+	// Gap: the change only fills a gap (a concept with no word yet).
+	Gap bool
+	// Stratum of the new word: native, or the donor and tick of a loan.
+	// Inside a language a loan spreads as a loan, keeping its stratum.
+	Stratum lex.Stratum
+	// Source is the donor's form of a loan before nativization.
+	Source phon.Word
+	// Keep: foreign segments survive nativization (heavy bilingualism).
+	Keep bool
+}
+
+// SemChange: Word's word gains Sense as an emerging extra meaning. It
+// applies where the variety's word for Word still has root Etym.
+type SemChange struct {
+	Word, Sense lex.ConceptID
+	Etym        lex.EtymID
 }
 
 // GramChange moves a slot's exponent one stage along the grammaticalization
@@ -64,9 +84,10 @@ type Innovation struct {
 	Family   string
 	Src      string // rule source (Sound)
 	Rule     *rules.Rule
-	Diffuse  string // "", "freq-first", "rare-first"
-	Stress   int8   // -1, or the phon.StressRule this change installs
-	Lex      *LexChange
+	Diffuse  string     // "", "freq-first", "rare-first"
+	Stress   int8       // -1, or the phon.StressRule this change installs
+	Lex      *LexChange // Lexical and Loan
+	Sem      *SemChange
 	Gram     *GramChange
 	Target   lex.ConceptID // Morph: the lexeme analogy regularizes
 	Order    *OrderChange
@@ -91,6 +112,11 @@ func (in *Innovation) Label() string {
 		return in.Template
 	case Lexical:
 		return "new word for '" + lex.Concepts()[in.Lex.Concept].Label + "' (" + in.Lex.How + ")"
+	case Loan:
+		return "'" + lex.Concepts()[in.Lex.Concept].Label + "' " + in.Lex.How
+	case Semantic:
+		cs := lex.Concepts()
+		return "the word for '" + cs[in.Sem.Word].Label + "' comes to mean '" + cs[in.Sem.Sense].Label + "' too"
 	case Gram:
 		return in.Gram.Label()
 	case Morph:

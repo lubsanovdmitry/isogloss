@@ -136,7 +136,8 @@ func (s *Sim) Digest() uint64 {
 		for i := 0; i < c.Variety.Lex.Len(); i++ {
 			l := c.Variety.Lex.At(lex.ConceptID(i))
 			mix(l.Hash)
-			mix(uint64(l.Etym))
+			mix(uint64(l.Etym) | uint64(l.Also)<<32 | uint64(l.Stratum.Kind)<<48)
+			mix(uint64(uint32(l.Stratum.Donor)) | uint64(uint32(l.Stratum.Tick))<<32)
 		}
 		m := &c.Variety.M
 		for _, e := range m.Exp {

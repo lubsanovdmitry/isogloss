@@ -16,24 +16,55 @@ const FirstCoinedRoot EtymID = 1 << 16
 // ProtoRoot is the root of a concept's word in the proto-language.
 func ProtoRoot(c ConceptID) EtymID { return EtymID(c) + 1 }
 
-// Stratum records where a lexeme came from.
+// StratumKind says how a word entered a variety.
+type StratumKind uint8
+
+const (
+	Inherited StratumKind = iota // native: inherited or coined
+	Borrowed                     // a loan from another language of the world
+	Substrate                    // a loan from a language its speakers replaced
+)
+
+// Stratum records where a lexeme came from. A loan only undergoes the
+// changes its variety adopted after it arrived, so strata show up as layers
+// of different correspondences.
 type Stratum struct {
-	Donor int32 // -1 native; otherwise the donor language (M3)
-	Tick  int32
+	Kind  StratumKind
+	Donor int32 // Borrowed: donor language ID; Substrate: substrate index; else -1
+	Tick  int32 // when it was borrowed
 }
 
 // Native is the stratum of inherited words.
 var Native = Stratum{Donor: -1}
 
-// Lexeme is a variety's word for one concept. M1 keeps one lexeme per
-// concept; polysemy (many-to-many senses) arrives with meaning drift in M3.
+// Loan reports whether the stratum is a borrowing of either kind.
+func (s Stratum) Loan() bool { return s.Kind != Inherited }
+
+// Lexeme is a variety's word for one concept. Lexicons are indexed by
+// concept; one word with several senses (polysemy) is the same root and
+// form in several concept slots. Also marks an emerging extra sense: the
+// word is starting to be used for that concept too (the first step of a
+// meaning shift along a CLICS edge).
 type Lexeme struct {
 	Concept ConceptID
 	Form    phon.Word
 	Freq    uint8
 	Stratum Stratum
-	Etym    EtymID
+	Etym    EtymID // 0: the variety has no word for the concept (yet)
+	Also    uint16 // emerging extra sense: concept+1, 0 for none
 	Hash    uint64 // FormHash(Form), kept current
+}
+
+// Absent reports whether the concept has no word (a cultural item not yet
+// known to its speakers).
+func (l *Lexeme) Absent() bool { return l.Etym == 0 }
+
+// AlsoSense returns the emerging extra sense, if any.
+func (l *Lexeme) AlsoSense() (ConceptID, bool) {
+	if l.Also == 0 {
+		return 0, false
+	}
+	return ConceptID(l.Also - 1), true
 }
 
 // EntryKind distinguishes entries in a variety's adoption history.
@@ -75,6 +106,7 @@ type Variety struct {
 	counts []segCount        // phoneme occurrence counts, sorted by features
 	inv    []phon.FeatureSet // cached inventory
 	prod   [2][]prodPattern  // cached productive affixes per part of speech
+	press  *Pressure         // cached lexical pressures (clashes, competitors, gaps)
 }
 
 // Derive returns a mutable copy of v with entry e appended to its history.
@@ -220,18 +252,23 @@ func (v *Variety) Inventory() []phon.FeatureSet {
 // Set, so this only clears the cached slice.
 func (v *Variety) Invalidate() { v.inv = nil }
 
-// Homophones counts core concepts whose form equals another core concept's.
+// Homophones counts core concepts whose form equals the form of another
+// core concept with a different root (one word with two senses is not
+// homophony).
 func (v *Variety) Homophones() int {
-	seen := map[uint64]int{}
+	roots := map[uint64][]EtymID{}
 	for i := 0; i < v.Lex.Len(); i++ {
-		if concepts[i].Core() {
-			seen[v.Lex.At(ConceptID(i)).Hash]++
+		if l := v.Lex.At(ConceptID(i)); concepts[i].Core() && !l.Absent() {
+			roots[l.Hash] = append(roots[l.Hash], l.Etym)
 		}
 	}
 	n := 0
-	for _, c := range seen { //lint:ordered summing counts is order-independent
-		if c > 1 {
-			n += c
+	for _, rs := range roots { //lint:ordered summing counts is order-independent
+		for _, r := range rs {
+			if r != rs[0] {
+				n += len(rs)
+				break
+			}
 		}
 	}
 	return n

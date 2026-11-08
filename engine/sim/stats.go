@@ -30,6 +30,11 @@ type Stats struct {
 	Communities int
 	Retention   [3]int // min, median, max over living languages (per-mille)
 	Sounds      [3]int // sound changes in each language's history: min, median, max
+	// Contact, over the comparative table (living languages' centres):
+	Loans, SubstrateWords int   // words borrowed from other languages / from substrates
+	Strata                int   // distinct donors (languages and substrates)
+	LoanDoublets          int   // loans whose root the same language also has natively
+	FirstSplit            int32 // tick the family first split (-1: still one language)
 }
 
 // Summarise computes calibration statistics.
@@ -46,6 +51,32 @@ func (s *Sim) Summarise() Stats {
 			}
 		}
 		snd = append(snd, n)
+	}
+	donors := map[lex.Stratum]bool{}
+	for _, l := range s.LivingLanguages() {
+		v := s.CentreVariety(l)
+		for i := 0; i < v.Lex.Len(); i++ {
+			x := v.Lex.At(lex.ConceptID(i))
+			switch x.Stratum.Kind {
+			case lex.Borrowed:
+				st.Loans++
+			case lex.Substrate:
+				st.SubstrateWords++
+			default:
+				continue
+			}
+			donors[lex.Stratum{Kind: x.Stratum.Kind, Donor: x.Stratum.Donor}] = true
+			if len(v.Doublets(lex.ConceptID(i))) > 0 {
+				st.LoanDoublets++
+			}
+		}
+	}
+	st.Strata = len(donors)
+	st.FirstSplit = -1
+	for _, l := range s.Langs {
+		if l.Born > 0 && (st.FirstSplit < 0 || l.Born < st.FirstSplit) {
+			st.FirstSplit = l.Born
+		}
 	}
 	st.Languages = len(ret)
 	st.Retention = spread3(ret)

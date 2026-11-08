@@ -77,7 +77,7 @@ func CLDF(s *sim.Sim) map[string]string {
 	for _, c := range lex.Concepts() {
 		csvRow(&params, c.Label, c.Label, strconv.Itoa(c.Concepticon), c.Gloss)
 	}
-	csvRow(&forms, "ID", "Language_ID", "Parameter_ID", "Value", "Form", "Segments")
+	csvRow(&forms, "ID", "Language_ID", "Parameter_ID", "Value", "Form", "Segments", "Loan", "Comment")
 	csvRow(&cogs, "ID", "Form_ID", "Cognateset_ID")
 	vars := []*lex.Variety{s.Proto.Variety}
 	for _, l := range s.LivingLanguages() {
@@ -87,6 +87,9 @@ func CLDF(s *sim.Sim) map[string]string {
 	for _, c := range lex.Concepts() {
 		for li, v := range vars {
 			l := v.Lex.At(c.ID)
+			if l.Absent() {
+				continue
+			}
 			n++
 			id := strconv.Itoa(n)
 			var segs []string
@@ -94,7 +97,7 @@ func CLDF(s *sim.Sim) map[string]string {
 				segs = append(segs, phon.Render(sg))
 			}
 			form := phon.RenderWord(l.Form)
-			csvRow(&forms, id, langID(li), c.Label, form, form, strings.Join(segs, " "))
+			csvRow(&forms, id, langID(li), c.Label, form, form, strings.Join(segs, " "), strconv.FormatBool(l.Stratum.Loan()), StratumDesc(s, l.Stratum))
 			csvRow(&cogs, id, id, strconv.FormatUint(uint64(l.Etym), 10))
 		}
 	}
@@ -130,7 +133,7 @@ func cldfMetadata(s *sim.Sim) string {
 	}
 	table("languages.csv", "LanguageTable", [][2]string{{"ID", "id"}, {"Name", "name"}, {"Is_Proto", ""}})
 	table("parameters.csv", "ParameterTable", [][2]string{{"ID", "id"}, {"Name", "name"}, {"Concepticon_ID", "concepticonReference"}, {"Concepticon_Gloss", ""}})
-	table("forms.csv", "FormTable", [][2]string{{"ID", "id"}, {"Language_ID", "languageReference"}, {"Parameter_ID", "parameterReference"}, {"Value", "value"}, {"Form", "form"}, {"Segments", "segments"}})
+	table("forms.csv", "FormTable", [][2]string{{"ID", "id"}, {"Language_ID", "languageReference"}, {"Parameter_ID", "parameterReference"}, {"Value", "value"}, {"Form", "form"}, {"Segments", "segments"}, {"Loan", ""}, {"Comment", "comment"}})
 	table("cognates.csv", "CognateTable", [][2]string{{"ID", "id"}, {"Form_ID", "formReference"}, {"Cognateset_ID", "cognatesetReference"}})
 	j.EndArr().End()
 	return j.String()

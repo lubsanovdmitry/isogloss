@@ -26,7 +26,7 @@ func GrammarMarkdown(s *sim.Sim, id int32) string {
 			b.WriteString(x)
 		}
 	}
-	pm := func(x int) string { return strconv.Itoa(x/1000) + "." + strconv.Itoa(x%1000/10+100)[1:] }
+	pm := func(x int) string { return strconv.Itoa(x/1000) + "." + strconv.Itoa(x%1000/10 + 100)[1:] }
 	ty := v.Typology()
 	w("# ", l.Name, "\n\n")
 	w("A descendant of ", s.ProtoName(), ", spoken in ", strconv.Itoa(len(l.Members)), " communities")
@@ -111,6 +111,24 @@ func GrammarMarkdown(s *sim.Sim, id int32) string {
 		w("\n")
 	}
 	w("● irregular: not what the regular pattern gives.\n\n")
+	w("## Vocabulary layers\n\n")
+	var loans []string
+	for i := 0; i < v.Lex.Len(); i++ {
+		x := v.Lex.At(lex.ConceptID(i))
+		if !x.Stratum.Loan() {
+			continue
+		}
+		line := "- " + phon.RenderWord(x.Form) + " '" + lex.Concepts()[i].Label + "': " + StratumDesc(s, x.Stratum)
+		for _, d := range v.Doublets(lex.ConceptID(i)) {
+			line += "; doublet of " + phon.RenderWord(v.Lex.At(d).Form) + " '" + lex.Concepts()[d].Label + "'"
+		}
+		loans = append(loans, line)
+	}
+	if len(loans) == 0 {
+		w("No loans: every word is native.\n\n")
+	} else {
+		w(strings.Join(loans, "\n"), "\n\n")
+	}
 	w("## Parallel text\n\n")
 	for _, c := range Fable {
 		var fs, gs []string

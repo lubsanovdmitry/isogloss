@@ -34,7 +34,7 @@ func TestViews(t *testing.T) {
 	valid(t, "frames", FramesJSON(s))
 	valid(t, "concepts", ConceptsJSON())
 	tb := Compare(s, true)
-	valid(t, "compare", tb.JSON())
+	valid(t, "compare", tb.JSON(s))
 	if len(tb.Rows) != 207 || len(tb.Langs) < 2 {
 		t.Errorf("table %d rows %d langs", len(tb.Rows), len(tb.Langs))
 	}
@@ -42,6 +42,9 @@ func TestViews(t *testing.T) {
 	valid(t, "innovs", InnovListJSON(s, 3))
 	valid(t, "innov", InnovJSON(s, 1))
 	valid(t, "intel", IntelJSON(s))
+	valid(t, "place", PlaceJSON(s, s.Communities()[0].Hex))
+	valid(t, "place-sea", PlaceJSON(s, 0))
+	valid(t, "compare-all", Compare(s, false).JSON(s))
 	valid(t, "preview", PreviewJSON(s, s.Communities()[0].Hex, "rule x:\n    a => e\n"))
 	valid(t, "preview-error", PreviewJSON(s, 0, "rule x:\n    a => [+nope]\n"))
 	w, _ := lex.ConceptByLabel("water")

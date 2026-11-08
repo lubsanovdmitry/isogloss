@@ -124,6 +124,28 @@
     </ul>
   </section>
 
+  {#if sk.strata}
+    <section>
+      <h3>Where the words come from</h3>
+      <p class="note">
+        Of the {sk.native + sk.strata.reduce((a, x) => a + x.count, 0)} concepts it has words for, {sk.native} are native (inherited or coined){sk.strata.length ? '; the rest are loans, each layer reshaped only by the sound changes after it arrived' : ''}.
+        {#if sk.unknown}{sk.unknown} things are not known to its speakers yet.{/if}
+      </p>
+      {#if sk.strata.length}
+        <ul class="strata">
+          {#each sk.strata as st (st.kind + st.donor)}
+            <li>
+              <span class="n">{st.count}</span>
+              <span>{st.kind === 'substrate' ? `from the ${st.donor} substrate` : `from ${st.donor}`},
+                {st.first === st.last ? `year ${st.first * 25}` : `years ${st.first * 25}–${st.last * 25}`}:
+                <span class="ex">{st.examples.join(', ')}{st.count > st.examples.length ? ', …' : ''}</span></span>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    </section>
+  {/if}
+
   {#if para?.lexemes}
     <section>
       <h3>Paradigms</h3>
@@ -210,6 +232,10 @@
   .para thead th { font-size: var(--t-sm); color: var(--ink-soft); font-weight: 500; }
   .para td.irr button { color: var(--isogloss); font-weight: 600; }
   .mark { color: var(--isogloss); font-size: 0.6em; vertical-align: super; margin-left: 0.15rem; }
+  .strata { list-style: none; padding: 0; margin: 0.3rem 0 0; font-size: var(--t-sm); }
+  .strata li { display: grid; grid-template-columns: 2.2rem 1fr; gap: 0.5rem; padding: 0.12rem 0; }
+  .strata .n { font-family: var(--serif); font-size: var(--t-lg); font-variant-numeric: tabular-nums; text-align: right; line-height: 1.1; }
+  .strata .ex { color: var(--ink-soft); }
   .all { font-size: var(--t-sm); color: var(--ink-soft); display: flex; gap: 0.35rem; align-items: center; }
   .changes { padding: 0; margin: 0.4rem 0 0; list-style: none; columns: 2; column-gap: 1.5rem; font-size: var(--t-sm); }
   .changes li { break-inside: avoid; padding: 0.1rem 0; }

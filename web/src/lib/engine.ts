@@ -1,6 +1,6 @@
 // Typed client for the engine worker.
-export interface Hex { id: number; col: number; row: number; biome: string; elev: number; river: boolean; down: number }
-export interface World { w: number; h: number; hexes: Hex[] }
+export interface Hex { id: number; col: number; row: number; biome: string; elev: number; river: boolean; down: number; sub: number }
+export interface World { w: number; h: number; hexes: Hex[]; substrates: { name: string; seed: number }[] }
 export interface Lang { id: number; name: string; centre: number; size: number; continuum: number; parent: number; born: number; died: number }
 export interface TreeNode { id: number; lang: number; parent: number; children: number[]; shared: number; defining: { id: number; label: string; kind?: string }[]; definingLex: number }
 export interface Event { tick: number; kind: string; hex: number; innov: number; lang: number; text: string }
@@ -10,12 +10,26 @@ export interface Snapshot {
   langs: Lang[]; tree: TreeNode[]; eventCount: number; events: Event[];
 }
 export interface Step { tick: number; innov: number; label: string; before: string; after: string }
-export interface Etym { concept: string; gloss: string; lang: string; hex: number; proto: string; protoLang: string; form: string; root: string; steps: Step[]; text: string }
-export interface Table { langs: string[]; rows: { concept: string; id: number; forms: string[]; cog: number[] }[] }
+export interface Etym {
+  concept: string; gloss: string; lang: string; hex: number; proto: string; protoLang: string; form: string; root: string; steps: Step[]; text: string;
+  loan: string; also: string; senses: string[]; doublets: { concept: string; form: string; loan: boolean }[];
+}
+export interface TableRow {
+  concept: string; id: number; forms: string[]; cog: number[];
+  loans: [number, 'loan' | 'substrate', string, number][]; // language index, kind, donor, tick
+  dbl: [number, string][]; // language index, concept sharing the root
+}
+export interface Table { langs: string[]; rows: TableRow[] }
+export interface Stratum { kind: 'loan' | 'substrate'; donor: string; count: number; first: number; last: number; examples: string[] }
+export interface Place {
+  original: string; originalName: string; gloss: string; namedBy: string; substrate: boolean;
+  form?: string; name?: string; since?: number; adopted?: string; lang?: string; steps?: Step[];
+}
 export interface Exponent { slot: string; name: string; pos: string; stage: string; kind: string; since: number; source?: string; sourceForm?: string; marker?: string }
 export interface Sketch {
   lang: Lang; vowels: string[]; consonants: string[]; template: string; stress: string; repair: string;
   changes: { tick: number; innov?: number; label: string; rule?: string; kind?: string }[]; replacements: number;
+  native: number; unknown: number; strata: Stratum[];
   exponents: Exponent[]; typology: { synthesis: number; fusion: number; irregularity: number; type: string };
   order: { param: string; value: string }[]; examples: string[];
 }

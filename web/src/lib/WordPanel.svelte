@@ -49,7 +49,7 @@
   <p class="hint">{error}. Choose a hex where people live.</p>
 {:else if etym}
   <article>
-    <h2><span class="ipa">{etym.form}</span> <span class="gloss">‘{etym.concept}’</span></h2>
+    <h2><span class="ipa">{etym.form || '—'}</span> <span class="gloss">‘{etym.concept}’</span></h2>
     <p class="lang">{etym.lang}, hex {etym.hex}</p>
     <ol>
       <li class="origin"><span class="t"></span><span class="what">{etym.protoLang}</span><span class="ipa">*{etym.proto}</span></li>
@@ -61,8 +61,18 @@
         </li>
       {/each}
     </ol>
+    {#if etym.loan}<p class="loan">{etym.loan[0].toUpperCase() + etym.loan.slice(1)}: it has gone through only the changes since.</p>{/if}
     <p class="root">Root: {etym.root}</p>
-    {#if etym.steps.length === 0}<p class="hint">No change yet: the word is still as it was in {etym.protoLang}.</p>{/if}
+    {#if etym.senses?.length}
+      <p class="root">The same word also means
+        {#each etym.senses as x, i (x)}{i ? ', ' : ''}<button class="link" onclick={() => onconcept(x)}>‘{x}’</button>{/each}.</p>
+    {/if}
+    {#if etym.also}<p class="root">It is starting to be used for <button class="link" onclick={() => onconcept(etym!.also)}>‘{etym.also}’</button> as well; the word for that may give way to it.</p>{/if}
+    {#if etym.doublets?.length}
+      <p class="root">Doublet{etym.doublets.length > 1 ? 's' : ''}: the same root came in twice, also giving
+        {#each etym.doublets as d, i (d.concept)}{i ? ', ' : ''}<span class="ipa">{d.form}</span> <button class="link" onclick={() => onconcept(d.concept)}>‘{d.concept}’</button>{d.loan ? ' (a loan)' : ''}{/each}.</p>
+    {/if}
+    {#if etym.steps.length === 0 && !etym.loan && etym.form}<p class="hint">No change yet: the word is still as it was in {etym.protoLang}.</p>{/if}
   </article>
 {:else if cet}
   <article>
@@ -101,4 +111,6 @@
   .origin .what { font-style: italic; }
   .root { color: var(--ink-soft); font-size: var(--t-sm); }
   .hint { color: var(--ink-soft); }
+  .loan { color: var(--isogloss); font-size: var(--t-sm); margin-bottom: 0; }
+  .link { background: none; border: none; padding: 0; cursor: pointer; font: inherit; color: inherit; text-decoration: underline dotted; }
 </style>

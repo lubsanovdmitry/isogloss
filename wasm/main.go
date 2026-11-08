@@ -169,7 +169,7 @@ func query(q js.Value) string {
 	}
 	switch kind {
 	case "compare":
-		return string(render.Compare(cur, q.Get("core").Truthy()).JSON())
+		return string(render.Compare(cur, q.Get("core").Truthy()).JSON(cur))
 	case "lang":
 		return string(render.LangJSON(cur, int32(num(q, "id", -1))))
 	case "word":
@@ -209,6 +209,8 @@ func query(q js.Value) string {
 		return string(render.IntelJSON(cur))
 	case "frames":
 		return string(render.FramesJSON(cur))
+	case "place":
+		return string(render.PlaceJSON(cur, int32(num(q, "hex", -1))))
 	case "save":
 		return saveJSON(cur.SaveState())
 	}

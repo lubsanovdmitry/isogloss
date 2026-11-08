@@ -3,6 +3,7 @@ package pop
 import (
 	"isogloss/engine/fx"
 	"isogloss/engine/lex"
+	"isogloss/engine/phon"
 	"isogloss/engine/world"
 )
 
@@ -14,6 +15,11 @@ type Community struct {
 	Lang      int32 // language ID from the last clustering, -1 before
 	Founded   int32
 	Diffusing []Diffusion // lexically diffusing changes still creeping through
+	// Name is the hex's place name as the community took it over (from a
+	// substrate, or the proto-language's own); the variety's sound changes
+	// from history entry NameAt on reshape it (history.Evolve).
+	Name   phon.Word
+	NameAt int32
 }
 
 // Diffusion tracks one diffusible change in one community.

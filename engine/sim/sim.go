@@ -3,6 +3,7 @@
 package sim
 
 import (
+	"isogloss/engine/contact"
 	"isogloss/engine/fx"
 	"isogloss/engine/history"
 	"isogloss/engine/lex"
@@ -33,6 +34,23 @@ type Config struct {
 	// GramRate, AnalogyRate, OrderRate scale grammaticalization steps,
 	// analogical levelling and word-order drift (1000 = default).
 	GramRate, AnalogyRate, OrderRate uint32
+	// SemRate: per-mille chance per community per tick that a word starts
+	// gaining a neighbouring sense (the first step of a meaning shift).
+	SemRate uint32
+	// LoanRate scales borrowing between languages (1000 = default).
+	LoanRate uint32
+	// InventRate: per-mille chance per tick that an unknown cultural item
+	// appears somewhere.
+	InventRate uint32
+	// Substrates: languages spoken on the land before the family spreads.
+	Substrates int32
+	// SubstrateRate: per-mille chance that settling substrate land leaves
+	// a substrate package (loans, a merger, word order).
+	SubstrateRate uint32
+	// CrossLang: per-mille strength of contact across a language boundary
+	// for sound and grammatical changes. Words never cross by the wave:
+	// they are borrowed.
+	CrossLang uint32
 }
 
 // DefaultConfig returns the standard configuration.
@@ -40,7 +58,7 @@ func DefaultConfig() Config {
 	return Config{
 		World:          world.DefaultConfig,
 		SoundRate:      60,
-		LexRate:        800,
+		LexRate:        700,
 		Candidates:     4,
 		ClusterEvery:   4,
 		SmallBias:      500,
@@ -49,6 +67,12 @@ func DefaultConfig() Config {
 		GramRate:       1000,
 		AnalogyRate:    1000,
 		OrderRate:      1000,
+		SemRate:        30,
+		LoanRate:       1000,
+		InventRate:     40,
+		Substrates:     4,
+		SubstrateRate:  100,
+		CrossLang:      500,
 	}
 }
 
@@ -105,6 +129,15 @@ type Sim struct {
 	contacts [][]pop.Contact
 	prestige []fx.Q16
 	nextRoot lex.EtymID
+
+	// Contact: substrate languages, their areas (per hex, -1 for none),
+	// every hex's original place name, cultural items known so far.
+	Subs     []*contact.Substrate
+	Region   []int32
+	Places   []contact.Place
+	invented []bool
+	subRoots map[[2]int32]lex.EtymID
+	lang     []int32 // per hex, for the language barrier in spread
 }
 
 // New creates a run at tick 0: map, proto-language and homeland.
@@ -117,6 +150,7 @@ func New(seed uint64, cfg Config) *Sim {
 		vars:     map[uint64]*lex.Variety{},
 		cl:       pop.NewClusterer(),
 		nextRoot: lex.FirstCoinedRoot,
+		subRoots: map[[2]int32]lex.EtymID{},
 	}
 	if cfg.Threshold > 0 {
 		s.cl.Thr = fx.FromPermille(cfg.Threshold)
@@ -129,6 +163,7 @@ func New(seed uint64, cfg Config) *Sim {
 	s.vars[s.Proto.Variety.Key] = s.Proto.Variety
 
 	home := s.homeland()
+	s.setupContact(home)
 	for _, h := range s.World.Land {
 		if s.World.Distance(home, h) <= cfg.HomelandRadius {
 			s.settle(h, 400, s.Proto.Variety, nil)
@@ -170,6 +205,10 @@ func (s *Sim) settle(h, people int32, v *lex.Variety, from *pop.Community) {
 	}
 	s.ByHex[h] = c
 	s.present[h] = true
+	s.takeName(c)
+	if from != nil {
+		s.substratePackage(c)
+	}
 }
 
 // Communities returns settled communities in hex order.
@@ -303,7 +342,22 @@ func (s *Sim) spread() {
 	}
 	var crossings []cross
 	fade := signedQ16(-350)
+	if len(s.lang) != len(s.ByHex) {
+		s.lang = make([]int32, len(s.ByHex))
+	}
+	for h, c := range s.ByHex {
+		s.lang[h] = -1
+		if c != nil {
+			s.lang[h] = c.Lang
+		}
+	}
+	structural := fx.FromPermille(s.Cfg.CrossLang)
 	for _, l := range s.live {
+		barrier := structural
+		switch l.in.Kind {
+		case history.Lexical, history.Loan, history.Semantic:
+			barrier = 0
+		}
 		spreading := l.age < l.in.Life
 		id := l.in.ID
 		rate := func(h int) int32 {
@@ -313,7 +367,7 @@ func (s *Sim) spread() {
 			f := int64(300 + hashIH(id, h)%1400) // per-mille local receptiveness
 			return int32(int64(l.in.Rate) * f / 1000)
 		}
-		for _, h := range l.wave.Step(s.present, s.contacts, s.prestige, rate, spreading) {
+		for _, h := range l.wave.Step(s.present, s.contacts, s.prestige, s.lang, barrier, rate, spreading) {
 			crossings = append(crossings, cross{l, h})
 		}
 		l.in.Curve = append(l.in.Curve, history.Adoption{Applied: uint16(l.wave.Count()), Reached: uint16(l.wave.Reach())})

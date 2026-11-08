@@ -1,6 +1,6 @@
 # What remains
 
-Status as of 2026-11-08: **M0, M1 and M2 are done** (gates met; see
+Status as of 2026-11-08: **M0–M3 are done** (gates met; see
 [IMPLEMENTATION.md](IMPLEMENTATION.md)). This list is ordered by when it is
 needed.
 
@@ -36,12 +36,23 @@ needed.
 - [ ] Performance: analogy and inflected cells doubled the cost of a run (0.8 → 1.6 s native on one core; 3.7–4.0 s in the browser). Ideas: cheaper productive-pattern updates, sampling cells in `MorphSim`.
 - [ ] Full syncretism (loss) is rare within 1000 years; check the 75% threshold against real attrition rates.
 
-## M3 · Meaning and contact
+## M3 · Meaning and contact (done)
 
-- [ ] Polysemy: lexemes with many senses; drift along CLICS edges (`engine/data/colex.tsv` is loaded by `lex.Colex`).
-- [ ] Homophony clashes queue replacements.
-- [ ] Borrowing with nativization (feature-distance mapping, phonotactic repair, stress/tone), loan strata (loans only undergo later changes), substrate packages, toponyms.
-- [ ] Gate: loan strata and doublets show up in the comparative table.
+- [x] Polysemy as shared words across concept slots; drift along CLICS edges in two steps (gain a sense, then the shift).
+- [x] Homophony clashes queue replacements.
+- [x] Cultural items unknown to the proto-language are invented and spread as words and loans.
+- [x] Borrowing with nativization, loan strata, substrate packages, place names; a language barrier for words.
+- [x] Gate: `TestLoanStrataAndDoublets`.
+
+### M3 follow-ups
+
+- [ ] Loans start only once the family splits, and families stay one language for 700+ years, so runs that split late (2 of 12 seeds) have no loans between languages. Polities, trade and prestige centres (M4) should drive borrowing more than border contact does.
+- [ ] Loans enter at borders and many never reach the language's centre, which the table shows. A standard (M4) would carry them.
+- [ ] Calques (loan translations of compounds) are not modelled.
+- [ ] Substrate phonology is a single merger; feature transfer (e.g. retroflexes) is not modelled.
+- [ ] Place names are not shown on the map itself, only for the selected hex; long compound names are common.
+- [ ] `make test-wasm` crashed in the Go runtime twice during M3 work, with only a GC goroutine dump captured (no first lines); the second time the seed sweeps were already capped at GOMAXPROCS. The two runs since passed. The wasm sim package now takes ~3.5 min (two 12–16-seed sweeps run one seed at a time). If CI shows it again, capture the full log and consider skipping the sweeps under wasm.
+- [ ] Polysemy is still high (30–80 concepts per language share a word with another). Real languages colexify perhaps 15–25% of a 300-concept list.
 
 ## M4 · Society and scenarios
 

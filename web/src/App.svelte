@@ -11,6 +11,7 @@
   import IntelPanel from './lib/IntelPanel.svelte';
   import FablePanel from './lib/FablePanel.svelte';
   import WaveChart from './lib/WaveChart.svelte';
+  import PlaceCard from './lib/PlaceCard.svelte';
 
   const engine = new Engine();
   const YEARS = 25;
@@ -21,6 +22,7 @@
   let concepts = $state<Concept[]>([]);
   let seed = $state('42');
   let selected = $state(-1);
+  let showSubs = $state(false);
   let concept = $state('water');
   let tab = $state<'tree' | 'word' | 'table' | 'intel' | 'lang' | 'fable' | 'rules' | 'log'>('tree');
   let cell = $state(-1); // paradigm cell shown in Word history (-1 = dictionary form)
@@ -202,8 +204,12 @@
 <main>
   <section class="atlas" aria-label="Map">
     {#if world}
-      <Atlas {world} {langOf} {selected} isogloss={isoSet} level={!viewing ? overlay?.level : null} onselect={select} />
+      <Atlas {world} {langOf} {selected} isogloss={isoSet} level={!viewing ? overlay?.level : null} substrates={showSubs} onselect={select} />
       <div class="under">
+        {#if selected >= 0}<PlaceCard {engine} hex={selected} tick={snap?.tick ?? 0} />{/if}
+        {#if world.substrates?.length}
+          <label class="subs"><input type="checkbox" bind:checked={showSubs} /> Show the languages spoken here before ({world.substrates.map((x) => x.name).join(', ')})</label>
+        {/if}
         <label class="iso">
           Isogloss
           <select
@@ -314,6 +320,8 @@
   .iso { color: var(--isogloss) !important; font-weight: 600; }
   .rule { margin: 0; color: var(--isogloss); flex-basis: 100%; }
   .chartrow { flex-basis: 100%; }
+  .under :global(.place) { flex-basis: 100%; }
+  .subs { flex-basis: 100%; font-size: var(--t-sm); color: var(--ink-soft); display: flex; gap: 0.35rem; align-items: center; }
   .wavenote { margin: 0; color: var(--ink-soft); flex-basis: 100%; font-size: var(--t-xs); }
   .scrub input { width: 12rem; max-width: 50vw; }
   .loading { color: var(--ink-soft); padding: 3rem 0; }

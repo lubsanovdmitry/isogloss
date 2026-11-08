@@ -8,9 +8,10 @@
     selected: number;
     isogloss: Set<number> | null; // hexes that adopted the chosen innovation
     level?: number[] | null; // live wave level per hex (per-mille), if still spreading
+    substrates?: boolean; // outline the areas of the languages spoken before the family
     onselect: (hex: number) => void;
   }
-  let { world, langOf, selected, isogloss, level = null, onselect }: Props = $props();
+  let { world, langOf, selected, isogloss, level = null, substrates = false, onselect }: Props = $props();
 
   const R = 14; // hex radius
   const W = Math.sqrt(3) * R;
@@ -65,6 +66,9 @@
   const coast = $derived(edgePath((a, b) => (world.hexes[a].biome === 'sea') !== (world.hexes[b].biome === 'sea')));
   const isoPath = $derived(
     isogloss ? edgePath((a, b) => langOf[a] >= 0 && langOf[b] >= 0 && isogloss!.has(a) !== isogloss!.has(b)) : '',
+  );
+  const subPath = $derived(
+    substrates ? edgePath((a, b) => world.hexes[a].sub !== world.hexes[b].sub && world.hexes[a].biome !== 'sea' && world.hexes[b].biome !== 'sea') : '',
   );
   const rivers = $derived(
     world.hexes
@@ -130,12 +134,22 @@
   <path d={coast} class="coast" />
   <path d={borders} class="border" />
   {#if isoPath}<path d={isoPath} class="iso" />{/if}
+  {#if subPath}
+    <path d={subPath} class="subarea" />
+    {#each world.substrates as sb (sb.seed)}
+      {@const h = world.hexes[sb.seed]}
+      <text x={cx(h.col, h.row)} y={cy(h.row)} class="sublabel">{sb.name}</text>
+    {/each}
+  {/if}
   {#if selected >= 0}
     <polygon points={polys[selected]} class="sel" />
   {/if}
 </svg>
 
 <style>
+  .subarea { fill: none; stroke: var(--ink); stroke-width: 1.6; stroke-dasharray: 4 3; opacity: 0.75; pointer-events: none; }
+  .sublabel { font-family: var(--serif); font-style: italic; font-size: 13px; text-anchor: middle; dominant-baseline: middle; fill: var(--ink);
+    paint-order: stroke; stroke: var(--paper); stroke-width: 3px; pointer-events: none; }
   svg { width: 100%; height: auto; display: block; max-height: calc(100vh - 9rem); }
   svg:focus:not(:focus-visible) { outline: none; }
   polygon { stroke: none; }

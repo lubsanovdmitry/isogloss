@@ -25,6 +25,14 @@ var simplifying = map[string]bool{"merger": true, "cluster": true, "erosion": tr
 func (s *Sim) newInnov(r *rng.Stream, in *history.Innovation, origin int32) {
 	in.Origin, in.Tick = origin, s.Tick
 	in.Rate = signedQ16(int32(r.IntN(1000)) - 250) // −0.25 .. 0.75
+	taken := in.Lex != nil && (in.Kind == history.Loan && in.Lex.Stratum.Kind == lex.Borrowed || in.Lex.Gap)
+	if taken {
+		// Loans from a prestigious neighbour and words for new things are
+		// taken up by fashion and travel further: rate 0.15 .. 0.85, 8–20
+		// ticks.
+		in.Rate = signedQ16(int32(r.IntN(700)) + 150)
+		in.Life = 8 + int32(r.IntN(13))
+	}
 	in.Life = 5 + int32(r.IntN(11))
 	s.Reg.Add(in)
 	if in.Kind == history.Sound {
@@ -32,11 +40,15 @@ func (s *Sim) newInnov(r *rng.Stream, in *history.Innovation, origin int32) {
 	}
 	l := &liveInnov{in: in, wave: pop.NewWave(len(s.World.Hexes))}
 	l.wave.Level[origin] = fx.FromPermille(seedLevelPermille)
+	if taken {
+		l.wave.Level[origin] = fx.One // the borrowing community uses the word
+	}
 	s.live = append(s.live, l)
 }
 
 // propose lets every community put forward new innovations.
 func (s *Sim) propose() {
+	s.invent()
 	for _, c := range s.ByHex {
 		if c == nil {
 			continue
@@ -51,18 +63,29 @@ func (s *Sim) propose() {
 			}
 		}
 		s.proposeGrammar(r, c)
+		press := c.Variety.Pressure()
 		for _, con := range lex.Concepts() {
+			if c.Variety.Lex.At(con.ID).Absent() {
+				continue // gaps are filled by invention and contact
+			}
 			rate := lexRatePer100k[con.Stab] * int(s.Cfg.LexRate) / 1000
 			if con.Taboo {
 				rate *= 3
 			}
+			if _, ok := press.DriftTo(con.ID); ok {
+				rate *= driftBoost
+			}
+			if _, ok := press.ClashWith(con.ID); ok {
+				rate = max(rate, clashRatePer100k*int(s.Cfg.LexRate)/1000)
+			}
 			if r.IntN(100000) >= rate {
 				continue
 			}
-			if lc := s.coin(r, c, con.ID); lc != nil {
-				s.newInnov(r, &history.Innovation{Kind: history.Lexical, Lex: lc, Stress: -1}, c.Hex)
+			if lc, kind := s.coin(r, c, con.ID, true); lc != nil {
+				s.newInnov(r, &history.Innovation{Kind: kind, Lex: lc, Stress: -1}, c.Hex)
 			}
 		}
+		s.proposeContact(r, c)
 	}
 }
 
@@ -248,14 +271,18 @@ func cmpFeat(a, b phon.FeatureSet) int {
 }
 
 // coin builds a new word for a concept: a meaning shift along a CLICS edge
-// (the neighbour's word gains this sense), a compound of native words, or a
-// fresh root. Taboo concepts favour euphemistic compounds.
-func (s *Sim) coin(r *rng.Stream, c *pop.Community, con lex.ConceptID) *history.LexChange {
+// (the neighbour's word gains this sense), a compound of native words, a
+// fresh root or, with allowLoan, a loan from a foreign neighbour. Taboo
+// concepts favour euphemistic compounds. A word another word is already
+// gaining as a sense is most likely replaced by it; a word that clashes
+// with a homophone says so in its etymology.
+func (s *Sim) coin(r *rng.Stream, c *pop.Community, con lex.ConceptID, allowLoan bool) (*history.LexChange, history.Kind) {
 	v := c.Variety
 	cs := lex.Concepts()
 	cur := v.Lex.At(con)
+	press := v.Pressure()
 	edges := lex.Colex(con)
-	wShift, wComp, wRoot := uint32(50), uint32(25), uint32(25)
+	wShift, wComp, wRoot, wLoan := uint32(20), uint32(25), uint32(25), uint32(0)
 	if len(edges) == 0 {
 		wShift = 0
 	}
@@ -265,26 +292,53 @@ func (s *Sim) coin(r *rng.Stream, c *pop.Community, con lex.ConceptID) *history.
 	if cs[con].Category != "Person/Thing" {
 		wComp = 0 // only things are named by compounds
 	}
-	switch r.Weighted([]uint32{wShift, wComp, wRoot}) {
+	var foreign []pop.Contact
+	if allowLoan {
+		foreign = s.foreign(c)
+		if len(foreign) > 0 {
+			wLoan = 25
+		}
+	}
+	drift, drifting := press.DriftTo(con)
+	if drifting {
+		wShift = 400
+	}
+	why := ""
+	if w, ok := press.ClashWith(con); ok {
+		why = ", after it came to sound like '" + cs[w].Label + "'"
+	}
+	switch r.Weighted([]uint32{wShift, wComp, wRoot, wLoan}) {
 	case 0:
-		ew := make([]uint32, len(edges))
-		for i, e := range edges {
-			ew[i] = uint32(e.Families)
+		var from lex.ConceptID
+		if drifting && r.Permille(800) {
+			from = drift
+		} else {
+			ew := make([]uint32, len(edges))
+			for i, e := range edges {
+				if !v.Lex.At(e.To).Absent() {
+					ew[i] = uint32(e.Families)
+				}
+			}
+			i := r.Weighted(ew)
+			if i < 0 {
+				return nil, 0
+			}
+			from = edges[i].To
 		}
-		e := edges[r.Weighted(ew)]
-		src := v.Lex.At(e.To)
-		if src.Hash == cur.Hash {
-			return nil
+		src := v.Lex.At(from)
+		if src.Etym == cur.Etym || src.Absent() {
+			return nil, 0
 		}
-		return &history.LexChange{Concept: con, Form: src.Form.Clone(), Freq: cur.Freq, Etym: src.Etym, How: "shift from '" + cs[e.To].Label + "'"}
+		return &history.LexChange{Concept: con, Form: src.Form.Clone(), Freq: cur.Freq, Etym: src.Etym, From: int32(from),
+			Stratum: src.Stratum, How: "shift from '" + cs[from].Label + "'" + why}, history.Lexical
 	case 1:
 		h, m, ok := compoundParts(r, con)
 		if !ok {
-			return nil
+			return nil, 0
 		}
 		hw, mw := v.Lex.At(h).Form, v.Lex.At(m).Form
-		if len(hw.Segs)+len(mw.Segs) > 10 {
-			return nil
+		if v.Lex.At(h).Absent() || v.Lex.At(m).Absent() || len(hw.Segs)+len(mw.Segs) > 10 {
+			return nil, 0
 		}
 		w := phon.Word{Segs: append(append([]phon.Segment(nil), mw.Segs...), hw.Segs...)}
 		for i := range w.Segs {
@@ -295,10 +349,21 @@ func (s *Sim) coin(r *rng.Stream, c *pop.Community, con lex.ConceptID) *history.
 		if cs[con].Taboo {
 			how = "euphemism " + how
 		}
-		return &history.LexChange{Concept: con, Form: w, Freq: cur.Freq, Etym: s.newRoot(c.Hex, how), How: how}
-	default:
+		return &history.LexChange{Concept: con, Form: w, Freq: cur.Freq, Etym: s.newRoot(c.Hex, how), From: -1, How: how + why}, history.Lexical
+	case 2:
 		w := lex.NewRoot(r, v, cur.Freq)
-		return &history.LexChange{Concept: con, Form: w, Freq: cur.Freq, Etym: s.newRoot(c.Hex, "new root"), How: "new root"}
+		return &history.LexChange{Concept: con, Form: w, Freq: cur.Freq, Etym: s.newRoot(c.Hex, "new root"), From: -1, How: "new root" + why}, history.Lexical
+	default:
+		k := foreign[r.IntN(len(foreign))]
+		d := s.ByHex[k.To]
+		if d.Variety.Lex.At(con).Absent() {
+			return nil, 0
+		}
+		lc, kind := s.takeWord(r, c, d, con, false)
+		if lc != nil {
+			lc.How += why
+		}
+		return lc, kind
 	}
 }
 

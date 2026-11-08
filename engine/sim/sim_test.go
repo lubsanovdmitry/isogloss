@@ -1,6 +1,8 @@
 package sim
 
 import (
+	"runtime"
+	"sync"
 	"testing"
 	"time"
 
@@ -99,20 +101,7 @@ func TestSeedSweep(t *testing.T) {
 	if testing.Short() {
 		t.Skip("slow")
 	}
-	const n = 16
-	stats := make([]Stats, n)
-	done := make(chan int)
-	for i := 0; i < n; i++ {
-		go func(i int) {
-			s := New(uint64(1000+i), DefaultConfig())
-			s.Run(40)
-			stats[i] = s.Summarise()
-			done <- i
-		}(i)
-	}
-	for i := 0; i < n; i++ {
-		<-done
-	}
+	stats := runSeeds(1000, 16, 40)
 	var langs, ret []int
 	for _, st := range stats {
 		t.Logf("seed %d: %2d languages, %3d communities, retention %v‰, sound changes %v", st.Seed, st.Languages, st.Communities, st.Retention, st.Sounds)
@@ -127,4 +116,24 @@ func TestSeedSweep(t *testing.T) {
 	if r[1] < 650 || r[1] > 900 {
 		t.Errorf("median retention %d‰ outside 650..900", r[1])
 	}
+}
+
+// runSeeds runs n seeds from first for ticks each, at most GOMAXPROCS at a
+// time (one at a time under wasm, whose memory is small), and summarises them.
+func runSeeds(first uint64, n int, ticks int) []Stats {
+	stats := make([]Stats, n)
+	sem := make(chan struct{}, runtime.GOMAXPROCS(0))
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(i int) {
+			defer func() { <-sem; wg.Done() }()
+			s := New(first+uint64(i), DefaultConfig())
+			s.Run(ticks)
+			stats[i] = s.Summarise()
+		}(i)
+	}
+	wg.Wait()
+	return stats
 }

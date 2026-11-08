@@ -174,6 +174,7 @@ func GenerateProto(r *rng.Stream) *Proto {
 		}
 		v.Set(c.ID, Lexeme{Concept: c.ID, Form: w, Freq: c.Freq, Stratum: Native, Etym: ProtoRoot(c.ID), Hash: FormHash(w)})
 	}
+	p.genSenses(rng.New(r.Uint64(), rng.Key("senses")))
 	p.genMorph(rng.New(r.Uint64(), rng.Key("morph")))
 	v.Key = 0x1505
 	return p
@@ -299,4 +300,45 @@ func NewRoot(r *rng.Stream, v *Variety, freq uint8) phon.Word {
 		return v.Lex.At(0).Form.Clone()
 	}
 	return p.root(r, freq)
+}
+
+// Shares of cultural items the proto-language already has words for, and of
+// strong colexification edges (attested in at least polyFamilies language
+// families) the proto-language already colexifies.
+const (
+	oldCulturePermille = 400
+	polyFamilies       = 8
+	polyPermille       = 80
+)
+
+// genSenses removes cultural items the proto-language does not know yet
+// (they are invented later and spread as words and loans) and lets some
+// pairs of concepts share one word, along strong CLICS edges: the less
+// frequent concept takes the more frequent one's word.
+func (p *Proto) genSenses(r *rng.Stream) {
+	v := p.Variety
+	cs := Concepts()
+	for _, c := range cs {
+		if c.Role == RoleCulture && !r.Permille(oldCulturePermille) {
+			v.Set(c.ID, Lexeme{Concept: c.ID, Freq: c.Freq, Stratum: Native, Hash: FormHash(phon.Word{})})
+		}
+	}
+	merged := make([]bool, len(cs))
+	for _, c := range cs {
+		for _, e := range Colex(c.ID) {
+			if e.To < c.ID || e.Families < polyFamilies || !r.Permille(polyPermille) {
+				continue
+			}
+			a, b := c.ID, e.To // b takes a's word
+			if cs[a].Freq > cs[b].Freq || cs[a].Freq == cs[b].Freq && cs[a].Stab > cs[b].Stab {
+				a, b = b, a
+			}
+			la, lb := v.Lex.At(a), v.Lex.At(b)
+			if merged[a] || merged[b] || la.Absent() || lb.Absent() || TrackedIndex(b) >= 0 {
+				continue
+			}
+			merged[a], merged[b] = true, true
+			v.Set(b, Lexeme{Concept: b, Form: la.Form, Freq: lb.Freq, Stratum: Native, Etym: la.Etym, Hash: la.Hash})
+		}
+	}
 }

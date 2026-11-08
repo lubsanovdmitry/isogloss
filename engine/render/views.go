@@ -20,7 +20,11 @@ func WorldJSON(s *sim.Sim) []byte {
 	for _, h := range s.World.Hexes {
 		j.Obj().KI("id", int64(h.ID)).KI("col", int64(h.Col)).KI("row", int64(h.Row)).
 			KS("biome", h.Biome.String()).KI("elev", int64(h.Elev)).KB("river", h.River).
-			KI("down", int64(h.Down)).End()
+			KI("down", int64(h.Down)).KI("sub", int64(s.Region[h.ID])).End()
+	}
+	j.EndArr().K("substrates").Arr()
+	for _, sb := range s.Subs {
+		j.Obj().KS("name", sb.Name).KI("seed", int64(sb.Seed)).End()
 	}
 	j.EndArr().End()
 	return j.Bytes()
@@ -109,6 +113,43 @@ type Etym struct {
 	Form     string
 	Steps    []history.TraceStep
 	Root     string // root description
+	Loan     string // how the word was borrowed, "" for native words
+	Senses   []string
+	Also     string // an emerging extra sense
+	Doublets []Doublet
+}
+
+// Doublet is another word of the same variety from the same root.
+type Doublet struct {
+	Concept, Form string
+	Loan          bool
+}
+
+// RootDesc describes a root: inherited, or coined (and how).
+func RootDesc(s *sim.Sim, id lex.EtymID) string {
+	switch {
+	case id == 0:
+		return ""
+	case id < lex.FirstCoinedRoot:
+		return s.ProtoName() + " root of '" + lex.Concepts()[id-1].Label + "'"
+	}
+	for _, r := range s.Roots {
+		if r.ID == id {
+			return "coined at t" + strconv.Itoa(int(r.Tick)) + " (" + r.How + ")"
+		}
+	}
+	return ""
+}
+
+// StratumDesc describes how a loan entered: "borrowed from Zhich at t23".
+func StratumDesc(s *sim.Sim, st lex.Stratum) string {
+	switch st.Kind {
+	case lex.Borrowed:
+		return "borrowed from " + s.DonorName(st) + " at t" + strconv.Itoa(int(st.Tick))
+	case lex.Substrate:
+		return "from the " + s.DonorName(st) + " substrate, at t" + strconv.Itoa(int(st.Tick))
+	}
+	return ""
 }
 
 // EtymOf traces concept c in the community at hex.
@@ -125,17 +166,27 @@ func EtymOf(s *sim.Sim, hex int32, c lex.ConceptID) (*Etym, bool) {
 	if com.Lang >= 0 {
 		e.Lang = s.Langs[com.Lang].Name
 	}
+	v := com.Variety
 	switch {
-	case final.Etym == lex.ProtoRoot(c):
+	case final.Absent():
+		e.Root = "no word: the thing is not known here yet"
+	case final.Etym == lex.ProtoRoot(c) && !final.Stratum.Loan():
 		e.Root = "inherited from " + e.ProtoLng
-	case final.Etym < lex.FirstCoinedRoot:
-		e.Root = "inherited root of '" + lex.Concepts()[final.Etym-1].Label + "'"
 	default:
-		for _, r := range s.Roots {
-			if r.ID == final.Etym {
-				e.Root = "coined at t" + strconv.Itoa(int(r.Tick)) + " (" + r.How + ")"
-			}
+		e.Root = RootDesc(s, final.Etym)
+	}
+	e.Loan = StratumDesc(s, final.Stratum)
+	for _, x := range v.Senses(c) {
+		if x != c {
+			e.Senses = append(e.Senses, lex.Concepts()[x].Label)
 		}
+	}
+	if a, ok := final.AlsoSense(); ok {
+		e.Also = lex.Concepts()[a].Label
+	}
+	for _, x := range v.Doublets(c) {
+		l := v.Lex.At(x)
+		e.Doublets = append(e.Doublets, Doublet{lex.Concepts()[x].Label, phon.RenderWord(l.Form), l.Stratum.Loan()})
 	}
 	return e, true
 }
@@ -158,7 +209,16 @@ func (e *Etym) Text() string {
 		b.WriteString("  t" + strconv.Itoa(int(s.Tick)) + strings.Repeat(" ", max(1, 4-len(strconv.Itoa(int(s.Tick))))) +
 			label + "  *" + phon.RenderWord(s.Before) + " → " + after + "\n")
 	}
+	if e.Loan != "" {
+		b.WriteString("  " + e.Loan + "\n")
+	}
 	b.WriteString("  root: " + e.Root + "\n")
+	if len(e.Senses) > 0 {
+		b.WriteString("  also means: " + strings.Join(e.Senses, ", ") + "\n")
+	}
+	for _, d := range e.Doublets {
+		b.WriteString("  doublet: " + d.Form + " '" + d.Concept + "'\n")
+	}
 	return b.String()
 }
 
@@ -167,7 +227,15 @@ func (e *Etym) JSON() []byte {
 	var j JSON
 	j.Obj().KS("concept", e.Concept.Label).KS("gloss", e.Concept.Gloss).KS("lang", e.Lang).
 		KI("hex", int64(e.Hex)).KS("proto", e.Proto).KS("protoLang", e.ProtoLng).KS("form", e.Form).
-		KS("root", e.Root).KS("text", e.Text()).K("steps").Arr()
+		KS("root", e.Root).KS("loan", e.Loan).KS("also", e.Also).KS("text", e.Text()).K("senses").Arr()
+	for _, x := range e.Senses {
+		j.S(x)
+	}
+	j.EndArr().K("doublets").Arr()
+	for _, d := range e.Doublets {
+		j.Obj().KS("concept", d.Concept).KS("form", d.Form).KB("loan", d.Loan).End()
+	}
+	j.EndArr().K("steps").Arr()
 	for _, s := range e.Steps {
 		j.Obj().KI("tick", int64(s.Tick)).KU("innov", uint64(s.Innov)).KS("label", s.Label).
 			KS("before", phon.RenderWord(s.Before)).KS("after", phon.RenderWord(s.After)).End()
@@ -186,8 +254,10 @@ type Table struct {
 // TableRow is one concept.
 type TableRow struct {
 	Concept lex.Concept
-	Forms   []string // per language; index 0 is the proto-language
-	Cog     []int    // cognate class per language
+	Forms   []string // per language; index 0 is the proto-language; "" for no word
+	Cog     []int    // cognate class per language, -1 for no word
+	Strata  []lex.Stratum
+	Dbl     []string // a doublet: another concept with the same root, "" for none
 }
 
 // Compare builds the comparative table over living languages (each
@@ -204,7 +274,19 @@ func Compare(s *sim.Sim, core bool) Table {
 		}
 		row := TableRow{Concept: c}
 		classes := map[lex.EtymID]int{}
-		add := func(l *lex.Lexeme) {
+		add := func(v *lex.Variety) {
+			l := v.Lex.At(c.ID)
+			row.Strata = append(row.Strata, l.Stratum)
+			dbl := ""
+			if d := v.Doublets(c.ID); len(d) > 0 {
+				dbl = lex.Concepts()[d[0]].Label
+			}
+			row.Dbl = append(row.Dbl, dbl)
+			if l.Absent() {
+				row.Forms = append(row.Forms, "")
+				row.Cog = append(row.Cog, -1)
+				return
+			}
 			k, ok := classes[l.Etym]
 			if !ok {
 				k = len(classes)
@@ -213,17 +295,19 @@ func Compare(s *sim.Sim, core bool) Table {
 			row.Forms = append(row.Forms, phon.RenderWord(l.Form))
 			row.Cog = append(row.Cog, k)
 		}
-		add(s.Proto.Variety.Lex.At(c.ID))
+		add(s.Proto.Variety)
 		for _, l := range langs {
-			add(s.CentreVariety(l).Lex.At(c.ID))
+			add(s.CentreVariety(l))
 		}
 		t.Rows = append(t.Rows, row)
 	}
 	return t
 }
 
-// JSON encodes the table.
-func (t Table) JSON() []byte {
+// JSON encodes the table. Loans and doublets are listed sparsely per row:
+// "loans": [[language index, "loan"|"substrate", donor, tick]], "dbl":
+// [[language index, other concept]].
+func (t Table) JSON(s *sim.Sim) []byte {
 	var j JSON
 	j.Obj().K("langs").Arr()
 	for _, l := range t.Langs {
@@ -238,6 +322,22 @@ func (t Table) JSON() []byte {
 		j.EndArr().K("cog").Arr()
 		for _, c := range r.Cog {
 			j.I(int64(c))
+		}
+		j.EndArr().K("loans").Arr()
+		for i, st := range r.Strata {
+			if st.Loan() {
+				kind := "loan"
+				if st.Kind == lex.Substrate {
+					kind = "substrate"
+				}
+				j.Arr().I(int64(i)).S(kind).S(s.DonorName(st)).I(int64(st.Tick)).EndArr()
+			}
+		}
+		j.EndArr().K("dbl").Arr()
+		for i, d := range r.Dbl {
+			if d != "" {
+				j.Arr().I(int64(i)).S(d).EndArr()
+			}
 		}
 		j.EndArr().End()
 	}
@@ -301,8 +401,64 @@ func LangJSON(s *sim.Sim, id int32) []byte {
 			lexCount++
 		}
 	}
-	j.KI("replacements", int64(lexCount)).End()
+	j.KI("replacements", int64(lexCount))
+	stratumJSON(&j, s, v)
+	j.End()
 	return j.Bytes()
+}
+
+// stratumJSON lists a variety's loan strata: per donor, how many of its
+// words survive, when the first and last arrived, and a few examples.
+func stratumJSON(j *JSON, s *sim.Sim, v *lex.Variety) {
+	type layer struct {
+		st          lex.Stratum
+		n           int
+		first, last int32
+		ex          []string
+	}
+	var layers []*layer
+	native, absent := 0, 0
+	for i := 0; i < v.Lex.Len(); i++ {
+		l := v.Lex.At(lex.ConceptID(i))
+		if l.Absent() {
+			absent++
+			continue
+		}
+		if !l.Stratum.Loan() {
+			native++
+			continue
+		}
+		var ly *layer
+		for _, x := range layers {
+			if x.st.Kind == l.Stratum.Kind && x.st.Donor == l.Stratum.Donor {
+				ly = x
+			}
+		}
+		if ly == nil {
+			ly = &layer{st: l.Stratum, first: l.Stratum.Tick, last: l.Stratum.Tick}
+			layers = append(layers, ly)
+		}
+		ly.n++
+		ly.first, ly.last = min(ly.first, l.Stratum.Tick), max(ly.last, l.Stratum.Tick)
+		if len(ly.ex) < 4 {
+			ly.ex = append(ly.ex, lex.Concepts()[i].Label)
+		}
+	}
+	slices.SortStableFunc(layers, func(a, b *layer) int { return b.n - a.n })
+	j.KI("native", int64(native)).KI("unknown", int64(absent)).K("strata").Arr()
+	for _, ly := range layers {
+		kind := "loan"
+		if ly.st.Kind == lex.Substrate {
+			kind = "substrate"
+		}
+		j.Obj().KS("kind", kind).KS("donor", s.DonorName(ly.st)).KI("count", int64(ly.n)).
+			KI("first", int64(ly.first)).KI("last", int64(ly.last)).K("examples").Arr()
+		for _, e := range ly.ex {
+			j.S(e)
+		}
+		j.EndArr().End()
+	}
+	j.EndArr()
 }
 
 // InnovJSON describes one innovation and where it applies now.
@@ -460,4 +616,37 @@ func structural(in *history.Innovation) bool {
 func gramTook(v *lex.Variety, in *history.Innovation) bool {
 	e := v.M.Exp[in.Gram.Slot]
 	return e.Source == in.Gram.Source && e.Stage >= in.Gram.To
+}
+
+// PlaceJSON describes a hex's place name: its form today in the community
+// living there, what it meant in the language that coined it, and how the
+// community's sound changes reshaped it.
+func PlaceJSON(s *sim.Sim, hex int32) []byte {
+	var j JSON
+	if hex < 0 || int(hex) >= len(s.Places) || !s.World.Hexes[hex].Land() {
+		return j.Null().Bytes()
+	}
+	p := &s.Places[hex]
+	by := s.ProtoName()
+	if p.Sub >= 0 {
+		by = s.Subs[p.Sub].Name
+	}
+	j.Obj().KS("original", phon.RenderWord(phon.Word{Segs: p.Form.Segs})).KS("gloss", p.Gloss).KS("namedBy", by).KB("substrate", p.Sub >= 0).
+		KS("originalName", phon.Capitalize(phon.Romanize(p.Form)))
+	if w, steps, ok := s.PlaceName(hex); ok {
+		c := s.ByHex[hex]
+		j.KS("form", phon.RenderWord(w)).KS("name", phon.Capitalize(phon.Romanize(w))).KI("since", int64(c.Founded)).
+			KS("adopted", phon.RenderWord(c.Name))
+		if c.Lang >= 0 {
+			j.KS("lang", s.Langs[c.Lang].Name)
+		}
+		j.K("steps").Arr()
+		for _, st := range steps {
+			j.Obj().KI("tick", int64(st.Tick)).KU("innov", uint64(st.Innov)).KS("label", st.Label).
+				KS("before", phon.RenderWord(st.Before)).KS("after", phon.RenderWord(st.After)).End()
+		}
+		j.EndArr()
+	}
+	j.End()
+	return j.Bytes()
 }

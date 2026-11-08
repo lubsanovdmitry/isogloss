@@ -60,7 +60,7 @@ func Correspondences(s *sim.Sim, minCount int) (langs []string, out []Correspond
 		ok := true
 		for i, v := range vars {
 			l := v.Lex.At(c.ID)
-			if l.Etym != root {
+			if l.Etym != root || l.Stratum.Loan() { // loans have their own correspondences
 				ok = false
 				break
 			}
