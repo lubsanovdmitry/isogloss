@@ -25,6 +25,7 @@ type Community struct {
 	// joined, and for foreign rule what came of it.
 	Polity  int32
 	Joined  int32
+	Foreign bool // it spoke another language than the capital's when it joined
 	Outcome society.Outcome
 }
 

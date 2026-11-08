@@ -15,7 +15,7 @@ func Retention(v *lex.Variety) int {
 			continue
 		}
 		n++
-		if v.Lex.At(c.ID).Etym == lex.ProtoRoot(c.ID) {
+		if v.Lex.At(c.ID).Etym == lex.FamilyRoot(v.Family, c.ID) {
 			kept++
 		}
 	}

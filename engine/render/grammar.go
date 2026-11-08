@@ -188,12 +188,13 @@ func CellEtymJSON(s *sim.Sim, hex int32, c lex.ConceptID, cell int) []byte {
 		return j.Obj().KS("error", "no such form").End().Bytes()
 	}
 	com := s.ByHex[hex]
-	start, steps, _ := history.TraceCell(s.Reg, s.Proto.Variety, com.Variety, c, cell)
+	proto := s.ProtoOf(com.Variety)
+	start, steps, _ := history.TraceCell(s.Reg, proto, com.Variety, c, cell)
 	cur := com.Variety.M.Para[i].Forms[cell]
 	form, gloss := Gloss(cur, lex.Concepts()[c].Label, cells[cell], &com.Variety.M)
-	pform, pgloss := Gloss(start, lex.Concepts()[c].Label, cells[cell], &s.Proto.Variety.M)
+	pform, pgloss := Gloss(start, lex.Concepts()[c].Label, cells[cell], &proto.M)
 	j.Obj().KS("concept", lex.Concepts()[c].Label).KS("cell", cells[cell].Label).KS("form", form).KS("gloss", gloss).
-		KS("proto", pform).KS("protoGloss", pgloss).KS("protoLang", s.ProtoName())
+		KS("proto", pform).KS("protoGloss", pgloss).KS("protoLang", s.FamilyName(com.Variety.Family))
 	if com.Lang >= 0 {
 		j.KS("lang", s.Langs[com.Lang].Name)
 	}

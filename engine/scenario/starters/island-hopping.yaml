@@ -1,0 +1,12 @@
+name: Island hopping
+summary: A seafaring founder group sets out from one island across an archipelago.
+watch: Inventories shrinking island by island through serial founder effects.
+ticks: 40
+world:
+  shape: archipelago
+  land: 170
+families:
+  - place: island|coast
+    radius: 0
+config:
+  seafaring: true

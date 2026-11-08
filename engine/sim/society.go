@@ -151,6 +151,7 @@ func (s *Sim) byHex(h int32) *pop.Community {
 
 func (s *Sim) join(c *pop.Community, p *society.Polity) {
 	c.Polity, c.Joined, c.Outcome = p.ID, s.Tick, society.Undecided
+	c.Foreign = s.ByHex[p.Capital] != nil && c.Lang != s.ByHex[p.Capital].Lang
 }
 
 // members lists a polity's communities in hex order.
@@ -228,7 +229,7 @@ func (s *Sim) langName(l int32) string {
 
 // ruleOutcomes decides what foreign rule does to a community once it has
 // lasted ruleTicks: by the ratio of the rulers' speakers to the locals'
-// within the polity. Many rulers: the locals shift (elite dominance);
+// among the polity's communities within three hexes. Many rulers: the locals shift (elite dominance);
 // few: the rulers' language leaves only loans (elite assimilation); in
 // between, both persist (bilingualism), which long rule turns into shift.
 func (s *Sim) ruleOutcomes(r *rng.Stream) {
@@ -238,8 +239,8 @@ func (s *Sim) ruleOutcomes(r *rng.Stream) {
 			continue
 		}
 		capC := s.ByHex[p.Capital]
-		if c.Lang == capC.Lang || c.Lang < 0 {
-			continue
+		if !c.Foreign || c.Lang == capC.Lang || c.Lang < 0 {
+			continue // dialects that drift apart inside a polity are not ruled as foreigners
 		}
 		ruled := s.Tick - c.Joined
 		if ruled < ruleTicks {
@@ -248,6 +249,9 @@ func (s *Sim) ruleOutcomes(r *rng.Stream) {
 		if c.Outcome == society.Undecided || c.Outcome == society.Bilingual && ruled >= 4*ruleTicks {
 			var rulers, locals int64
 			for _, m := range s.members(p) {
+				if s.World.Distance(m.Hex, c.Hex) > 3 {
+					continue // what matters is who lives around here
+				}
 				switch m.Lang {
 				case capC.Lang:
 					rulers += int64(m.Pop)
@@ -400,6 +404,9 @@ func (s *Sim) migrate(r *rng.Stream) {
 // seafarer reports whether a community belongs to a seafaring polity and
 // lies on the coast.
 func (s *Sim) seafarer(c *pop.Community) bool {
+	if s.Cfg.Seafaring {
+		return s.coastal(c.Hex)
+	}
 	p := s.polityOf(c)
 	return p != nil && p.Seafaring && s.coastal(c.Hex)
 }
@@ -451,6 +458,37 @@ func (s *Sim) planRoutes() {
 	s.hub = map[int32]bool{}
 	s.routeEdge = map[[2]int32]bool{}
 	s.routeLinks = map[int32][]int32{}
+	addRoute := func(x, y int32, path []int32) {
+		if x > y {
+			x, y = y, x
+		}
+		if slices.ContainsFunc(s.Routes, func(rt society.Route) bool { return rt.A == x && rt.B == y }) {
+			return
+		}
+		if path[0] != x {
+			path = slices.Clone(path)
+			slices.Reverse(path)
+		}
+		s.Routes = append(s.Routes, society.Route{A: x, B: y, Path: path, Since: s.Tick})
+		s.hub[x], s.hub[y] = true, true
+		s.routeLinks[x] = append(s.routeLinks[x], y)
+		s.routeLinks[y] = append(s.routeLinks[y], x)
+		for i := 0; i+1 < len(path); i++ {
+			e := [2]int32{min(path[i], path[i+1]), max(path[i], path[i+1])}
+			s.routeEdge[e] = true
+		}
+		if !old[[2]int32{x, y}] && s.ByHex[x] != nil && s.ByHex[y] != nil {
+			n1, _, _ := s.PlaceName(x)
+			n2, _, _ := s.PlaceName(y)
+			s.log(history.Event{Kind: "trade", Hex: x, Lang: s.ByHex[x].Lang,
+				Text: "a trade route opens between " + phon.Capitalize(phon.Romanize(n1)) + " and " + phon.Capitalize(phon.Romanize(n2))})
+		}
+	}
+	for _, fr := range s.FixedRoutes {
+		if p := society.Path(s.World, fr[0], fr[1], true, 1<<30); p != nil {
+			addRoute(fr[0], fr[1], p)
+		}
+	}
 	for _, a := range hubs {
 		type cand struct {
 			b    *pop.Community
@@ -468,32 +506,7 @@ func (s *Sim) planRoutes() {
 		}
 		slices.SortStableFunc(cs, func(x, y cand) int { return int(dist[x.b.Hex] - dist[y.b.Hex]) })
 		for _, c := range cs[:min(2, len(cs))] {
-			x, y := a.Hex, c.b.Hex
-			if x > y {
-				x, y = y, x
-			}
-			if slices.ContainsFunc(s.Routes, func(rt society.Route) bool { return rt.A == x && rt.B == y }) {
-				continue
-			}
-			path := c.path
-			if path[0] != x {
-				path = slices.Clone(path)
-				slices.Reverse(path)
-			}
-			s.Routes = append(s.Routes, society.Route{A: x, B: y, Path: path, Since: s.Tick})
-			s.hub[x], s.hub[y] = true, true
-			s.routeLinks[x] = append(s.routeLinks[x], y)
-			s.routeLinks[y] = append(s.routeLinks[y], x)
-			for i := 0; i+1 < len(path); i++ {
-				e := [2]int32{min(path[i], path[i+1]), max(path[i], path[i+1])}
-				s.routeEdge[e] = true
-			}
-			if !old[[2]int32{x, y}] {
-				n1, _, _ := s.PlaceName(x)
-				n2, _, _ := s.PlaceName(y)
-				s.log(history.Event{Kind: "trade", Hex: x, Lang: s.ByHex[x].Lang,
-					Text: "a trade route opens between " + phon.Capitalize(phon.Romanize(n1)) + " and " + phon.Capitalize(phon.Romanize(n2))})
-			}
+			addRoute(a.Hex, c.b.Hex, c.path)
 		}
 	}
 }
@@ -526,8 +539,11 @@ func (s *Sim) adjustContacts() {
 		for k := range cs {
 			cj := s.ByHex[cs[k].To]
 			w := int64(cs[k].W)
-			if ci.Polity >= 0 && ci.Polity == cj.Polity && s.polityOf(ci) != nil {
+			if p := s.polityOf(ci); p != nil && ci.Polity == cj.Polity {
 				w = w * 3 / 2
+				if p.Standard != nil && !p.Classical {
+					w = w * 2 // roads, administration and a written norm
+				}
 			}
 			if s.routeEdge[[2]int32{min(int32(i), cs[k].To), max(int32(i), cs[k].To)}] {
 				w *= 2

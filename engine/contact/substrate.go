@@ -20,17 +20,22 @@ type Substrate struct {
 }
 
 // GenerateSubstrates places k substrate languages over the land outside the
-// homeland (hexes within radius of home). Seeds are spread out by
-// farthest-point sampling; every other land hex belongs to the nearest
-// seed. region[h] is the substrate index, or -1 for the homeland and sea.
-func GenerateSubstrates(seed uint64, w *world.World, home, radius int32, k int) ([]*Substrate, []int32) {
+// families' homelands (homeland[h]). Seeds are spread out by
+// farthest-point sampling, away from the homelands; every other land hex
+// belongs to the nearest seed. region[h] is the substrate index, or -1 for
+// homelands and sea.
+func GenerateSubstrates(seed uint64, w *world.World, homeland []bool, k int) ([]*Substrate, []int32) {
 	region := make([]int32, len(w.Hexes))
 	for i := range region {
 		region[i] = -1
 	}
 	var cands []int32
 	for _, h := range w.Land {
-		if w.Distance(home, h) > radius+1 {
+		near := homeland[h]
+		for _, nb := range w.Hexes[h].Nbr {
+			near = near || nb >= 0 && homeland[nb]
+		}
+		if !near {
 			cands = append(cands, h)
 		}
 	}
@@ -54,7 +59,7 @@ func GenerateSubstrates(seed uint64, w *world.World, home, radius int32, k int) 
 		seeds = append(seeds, best)
 	}
 	for _, h := range w.Land {
-		if w.Distance(home, h) <= radius {
+		if homeland[h] {
 			continue
 		}
 		best, bestD := int32(0), int32(1<<30)
@@ -77,7 +82,8 @@ func GenerateSubstrates(seed uint64, w *world.World, home, radius int32, k int) 
 type Place struct {
 	Form  phon.Word
 	Gloss string // "white river", "Tamu's hill"
-	Sub   int32  // substrate that named it, -1 for the proto-language
+	Sub   int32  // substrate that named it, -1 for a family's proto-language
+	Fam   uint8  // when Sub < 0: the family whose proto-language named it
 }
 
 // Landscape words a place may be named after, by biome; rivers name the

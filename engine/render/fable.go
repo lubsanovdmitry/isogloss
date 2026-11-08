@@ -292,7 +292,9 @@ func FableJSON(s *sim.Sim) []byte {
 		}
 		j.EndArr().End()
 	}
-	emit(s.ProtoName(), -1, s.Proto.Variety)
+	for f, p := range s.Protos {
+		emit(s.FamilyName(uint8(f)), -1-int32(f), p.Variety)
+	}
 	for _, l := range s.LivingLanguages() {
 		emit(l.Name, l.ID, s.CentreVariety(l))
 	}

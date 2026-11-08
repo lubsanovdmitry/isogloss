@@ -1,0 +1,22 @@
+name: Empire collapse
+summary: >-
+  One prestige language is spoken across the whole continent, held together by
+  an empire with a written standard. The empire breaks apart in year 1000.
+watch: A dialect continuum forming out of one standard once the centre no longer holds.
+ticks: 72
+world:
+  land: 220
+families:
+  - place: centre
+    radius: all
+config:
+  collapse-rate: 0 # the empire stands until it is made to fall
+polities:
+  - capital: centre
+    covers: all
+    script: alphabet
+    standard: true
+events:
+  - year: 1000
+    do: collapse
+    polity: 0

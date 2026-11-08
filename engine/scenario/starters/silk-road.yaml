@@ -1,0 +1,23 @@
+name: Silk road
+summary: >-
+  A long trade route crosses a strip of land held by three unrelated
+  families, west, centre and east.
+watch: Wanderwörter travelling the route, and loan strata building up along it.
+ticks: 40
+world:
+  shape: corridor
+  width: 40
+  height: 12
+  land: 280
+families:
+  - place: west
+    radius: 2
+  - place: centre
+    radius: 2
+  - place: east
+    radius: 2
+events:
+  - year: 100
+    do: route
+    place: west
+    from: east

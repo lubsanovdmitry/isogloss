@@ -16,6 +16,7 @@ import (
 	"isogloss/engine/lex"
 	"isogloss/engine/morph"
 	"isogloss/engine/render"
+	"isogloss/engine/scenario"
 	"isogloss/engine/sim"
 )
 
@@ -30,16 +31,47 @@ type runFile struct {
 func runRun(args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
 	seed := fs.Uint64("seed", 42, "random seed")
-	ticks := fs.Int("ticks", 40, "ticks to simulate (one tick = one generation, ~25 years)")
+	ticks := fs.Int("ticks", 0, "ticks to simulate (one tick = one generation, ~25 years); default 40 or the scenario's length")
 	path := fs.String("out", "", "write the run to this JSON file")
+	scen := fs.String("scenario", "", "start from a scenario: a starter ID ("+starterIDs()+") or a YAML file")
 	fs.Parse(args)
 
+	var sc *scenario.Scenario
+	if *scen != "" {
+		src := ""
+		if st, ok := scenario.StarterByID(*scen); ok {
+			src = st.Src
+		} else {
+			b, err := os.ReadFile(*scen)
+			if err != nil {
+				return fmt.Errorf("no starter %q and no such file: %w", *scen, err)
+			}
+			src = string(b)
+		}
+		var err error
+		if sc, err = scenario.Read(src); err != nil {
+			return err
+		}
+	}
 	start := time.Now()
-	s := sim.New(*seed, sim.DefaultConfig())
-	s.Run(*ticks)
+	s, err := sim.NewScenario(*seed, sim.DefaultConfig(), sc)
+	if err != nil {
+		return err
+	}
+	n := *ticks
+	if n == 0 {
+		n = 40
+		if sc != nil {
+			n = int(sc.Ticks)
+		}
+	}
+	s.Run(n)
 	el := time.Since(start)
 
-	fmt.Fprintf(out, "seed %d: %d ticks (%d years) in %v\n", *seed, s.Tick, s.Tick*25, el.Round(time.Millisecond))
+	if sc != nil {
+		fmt.Fprintf(out, "scenario: %s\n  %s\n  watch: %s\n", sc.Name, sc.Summary, sc.Watch)
+	}
+	fmt.Fprintf(out, "seed %d: %d ticks (%d years) in %v\n", s.Seed, s.Tick, s.Tick*25, el.Round(time.Millisecond))
 	fmt.Fprintf(out, "%s → %d languages, %d communities, %d innovations\n\n", s.ProtoName(), len(s.LivingLanguages()), len(s.Communities()), len(s.Reg.All))
 	printTree(out, s)
 
@@ -78,7 +110,15 @@ func printTree(out io.Writer, s *sim.Sim) {
 		}
 		switch {
 		case id == 0:
-			fmt.Fprintf(out, "%s%s%s\n", pad, s.ProtoName(), defs)
+			name := s.ProtoName()
+			if len(s.Protos) > 1 {
+				var ns []string
+				for f := range s.Protos {
+					ns = append(ns, s.FamilyName(uint8(f)))
+				}
+				name = strings.Join(ns, ", ") + " (unrelated families)"
+			}
+			fmt.Fprintf(out, "%s%s%s\n", pad, name, defs)
 		case n.Lang >= 0:
 			l := s.Langs[n.Lang]
 			fmt.Fprintf(out, "%s%s (%d hexes)%s\n", pad, l.Name, len(l.Members), defs)
@@ -272,4 +312,12 @@ func runGrammar(args []string, out io.Writer) error {
 		return fmt.Errorf("no living language named %q", *langName)
 	}
 	return nil
+}
+
+func starterIDs() string {
+	var ids []string
+	for _, st := range scenario.Starters() {
+		ids = append(ids, st.ID)
+	}
+	return strings.Join(ids, ", ")
 }

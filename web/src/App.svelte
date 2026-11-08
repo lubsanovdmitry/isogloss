@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Engine, type Concept, type Event, type Frame, type InnovInfo, type InnovSummary, type Snapshot, type TreeNode, type World } from './lib/engine';
+  import { Engine, type Concept, type Event, type Frame, type InnovInfo, type InnovSummary, type Snapshot, type TreeNode, type World, type ScenarioEntry } from './lib/engine';
   import Atlas from './lib/Atlas.svelte';
   import TreeItem from './lib/TreeItem.svelte';
   import WordPanel from './lib/WordPanel.svelte';
@@ -21,6 +21,8 @@
   let events = $state<Event[]>([]);
   let concepts = $state<Concept[]>([]);
   let seed = $state('42');
+  let scenarioID = $state('');
+  let scenarios = $state<ScenarioEntry[]>([]);
   let selected = $state(-1);
   let showSubs = $state(false);
   let mapMode = $state<'langs' | 'polities'>('langs');
@@ -56,6 +58,12 @@
   const isoSet = $derived(overlay && !viewing ? new Set(overlay.applied) : null);
   const nodes = $derived(new Map<number, TreeNode>((snap?.tree ?? []).map((n) => [n.id, n])));
   const living = $derived(snap ? snap.langs.filter((l) => l.died < 0) : []);
+  const selPolity = $derived.by(() => {
+    if (!snap || selected < 0) return null;
+    const c = snap.comms.find((x) => x[0] === selected);
+    const p = c && c[3] >= 0 ? snap.polities.find((q) => q.id === c[3] && q.fell < 0) : undefined;
+    return p ? { id: p.id, name: p.name } : null;
+  });
   const selLang = $derived(selected >= 0 ? langOf[selected] : -1);
   const shownLang = $derived(focusLang >= 0 ? focusLang : selLang);
 
@@ -76,7 +84,7 @@
     busy = true;
     status = 'Generating a continent and its proto-language…';
     try {
-      const r = await engine.call<{ world: World; snapshot: Snapshot }>('init', { seed: seed.trim() || '1' });
+      const r = await engine.call<{ world: World; snapshot: Snapshot }>('init', { seed: seed.trim() || '1', scenario: scenarioID });
       world = r.world;
       accept(r.snapshot, true);
       selected = -1;
@@ -177,6 +185,7 @@
 
   onMount(async () => {
     concepts = await engine.query<Concept[]>('concepts');
+    scenarios = await engine.query<ScenarioEntry[]>('scenarios');
     cells = await engine.query<Record<string, string[]>>('cells');
     await newRun();
   });
@@ -196,8 +205,18 @@
       · {living.length} {living.length === 1 ? 'language' : 'languages'}
     </p>
   {/if}
+  {#if snap?.scenario}
+    <p class="scen"><strong>{snap.scenario.name}.</strong> {snap.scenario.summary} <em>Watch:</em> {snap.scenario.watch}
+      {#if snap.tick < snap.scenario.ticks}<span class="soft">Runs for {snap.scenario.ticks * YEARS} years.</span>{/if}</p>
+  {/if}
   <div class="controls">
     <label>Seed <input bind:value={seed} size="6" aria-label="Seed" /></label>
+    <label>Start
+      <select bind:value={scenarioID} aria-label="Scenario">
+        <option value="">one family, one homeland</option>
+        {#each scenarios as sc (sc.id)}<option value={sc.id}>{sc.name}</option>{/each}
+      </select>
+    </label>
     <button onclick={newRun} disabled={busy && !running}>New world</button>
     <span class="sep"></span>
     <button onclick={() => step(1)} disabled={busy || running}>Next generation</button>
@@ -283,7 +302,7 @@
         {:else if tab === 'fable'}
           <FablePanel {engine} tick={snap.tick} onlang={(id) => { focusLang = id; tab = 'lang'; }} />
         {:else if tab === 'rules'}
-          <RulePanel {engine} hex={selected} onscheduled={(m) => (status = m)} />
+          <RulePanel {engine} hex={selected} polity={selPolity} onscheduled={(m) => (status = m)} />
         {:else}
           <Chronicle {events} oninnov={showInnov} onhex={select} />
         {/if}
@@ -302,6 +321,9 @@
 </footer>
 
 <style>
+  .scen { margin: 0.2rem 0 0.4rem; font-size: var(--t-sm); color: var(--ink-soft); max-width: 70rem; }
+  .scen strong { color: var(--ink); }
+  .scen .soft { margin-left: 0.3rem; }
   header {
     display: grid;
     grid-template-columns: auto 1fr;

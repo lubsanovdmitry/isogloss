@@ -38,9 +38,14 @@ const (
 const placeFreq = 3
 
 // setupContact generates substrate languages and every hex's place name.
-func (s *Sim) setupContact(home int32) {
-	s.Subs, s.Region = contact.GenerateSubstrates(s.Seed, s.World, home, s.Cfg.HomelandRadius, int(s.Cfg.Substrates))
-	used := map[string]bool{s.ProtoName(): true}
+// homes are the families' homeland centres; homeland marks every hex
+// settled at the start.
+func (s *Sim) setupContact(homes []int32, homeland []bool) {
+	s.Subs, s.Region = contact.GenerateSubstrates(s.Seed, s.World, homeland, int(s.Cfg.Substrates))
+	used := map[string]bool{}
+	for f := range s.Protos {
+		used[s.FamilyName(uint8(f))] = true
+	}
 	person, _ := lex.ConceptByLabel("person")
 	for _, sb := range s.Subs {
 		n := phon.Capitalize(phon.Romanize(sb.V.Lex.At(person).Form))
@@ -53,15 +58,19 @@ func (s *Sim) setupContact(home int32) {
 	s.Places = make([]contact.Place, len(s.World.Hexes))
 	for _, h := range s.World.Land {
 		r := rng.New(s.Seed, rng.Key("place"), uint64(h))
-		v, sub := s.Proto.Variety, int32(-1)
+		fam := s.nearestFamily(homes, h)
+		v, sub := s.Protos[fam].Variety, int32(-1)
 		if k := s.Region[h]; k >= 0 {
 			v, sub = s.Subs[k].V, k
 		}
 		s.Places[h] = contact.NamePlace(r, v, &s.World.Hexes[h], sub)
+		s.Places[h].Fam = fam
 	}
 	s.invented = make([]bool, lex.NumConcepts())
 	for i := range s.invented {
-		s.invented[i] = !s.Proto.Variety.Lex.At(lex.ConceptID(i)).Absent()
+		for _, p := range s.Protos {
+			s.invented[i] = s.invented[i] || !p.Variety.Lex.At(lex.ConceptID(i)).Absent()
+		}
 	}
 }
 
@@ -71,7 +80,7 @@ func (s *Sim) setupContact(home int32) {
 func (s *Sim) takeName(c *pop.Community) {
 	p := &s.Places[c.Hex]
 	c.NameAt = c.Variety.Hist.Len()
-	if p.Sub < 0 {
+	if p.Sub < 0 && p.Fam == c.Variety.Family {
 		c.Name = phon.Word{Segs: p.Form.Segs, Syll: p.Form.Syll} // no longer analysed as a compound
 		return
 	}
@@ -85,7 +94,7 @@ func (s *Sim) PlaceName(h int32) (phon.Word, []history.TraceStep, bool) {
 	if c == nil {
 		return phon.Word{}, nil, false
 	}
-	w, steps := history.Evolve(s.Reg, s.Proto.Variety, c.Variety, c.Name, int(c.NameAt), placeFreq)
+	w, steps := history.Evolve(s.Reg, s.ProtoOf(c.Variety), c.Variety, c.Name, int(c.NameAt), placeFreq)
 	return w, steps, true
 }
 
@@ -403,4 +412,54 @@ func substrateMerger(r *rng.Stream, v *lex.Variety, sb *contact.Substrate) *hist
 			Src: src, Rule: rule, Stress: -1}
 	}
 	return nil
+}
+
+// founderPermille: chance that a small group settling across the sea loses
+// one of its rarer sounds (serial founder effects thin inventories).
+const founderPermille = 1000
+
+// founderEffect: a founding group may lose its rarest sound, merging it
+// into the nearest other phoneme.
+func (s *Sim) founderEffect(c *pop.Community) {
+	if c == nil {
+		return
+	}
+	r := rng.New(s.Seed, rng.Key("founder"), uint64(s.Tick), uint64(c.Hex))
+	if !r.Permille(founderPermille) {
+		return
+	}
+	v := c.Variety
+	inv := v.Inventory()
+	count := map[phon.FeatureSet]int{}
+	for i := 0; i < v.Lex.Len(); i++ {
+		for _, sg := range v.Lex.At(lex.ConceptID(i)).Form.Segs {
+			count[sg.F]++
+		}
+	}
+	rarest, n := phon.FeatureSet{}, 1<<30
+	for _, f := range inv {
+		if count[f] > 0 && count[f] < n {
+			rarest, n = f, count[f]
+		}
+	}
+	var others []phon.FeatureSet
+	for _, f := range inv {
+		if f != rarest && f.Has(phon.Syllabic) == rarest.Has(phon.Syllabic) {
+			others = append(others, f)
+		}
+	}
+	if n == 1<<30 || len(others) < 2 {
+		return
+	}
+	y := contact.Nearest(rarest, others)
+	src := "rule founder-loss:\n    " + phon.RenderFeatures(rarest) + " => " + phon.RenderFeatures(y) + "\n"
+	rule, err := tmpl.Compile(src)
+	if err != nil {
+		return
+	}
+	s.newInnov(r, &history.Innovation{Kind: history.Sound, Template: "founder effect: " + phon.RenderFeatures(rarest) + " lost", Family: "merger",
+		Src: src, Rule: rule, Stress: -1}, c.Hex)
+	l := s.live[len(s.live)-1]
+	l.wave.Level[c.Hex] = fx.One // the founders never had the sound,
+	l.in.Life = 0                // and nobody else loses it: only their descendants
 }

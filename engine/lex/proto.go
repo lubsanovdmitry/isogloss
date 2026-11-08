@@ -78,12 +78,25 @@ type Proto struct {
 	Vowels     []phon.FeatureSet
 	Consonants []phon.FeatureSet
 	freqOf     map[phon.FeatureSet]int
+	maxSyl     int
 }
 
 // GenerateProto builds a proto-language: an inventory sampled from PHOIBLE
 // frequencies under implicational constraints, a syllable template, a stress
 // rule, and one root per concept (frequent concepts get shorter roots).
-func GenerateProto(r *rng.Stream) *Proto {
+func GenerateProto(r *rng.Stream) *Proto { return GenerateProtoWith(r, ProtoOptions{}) }
+
+// ProtoOptions constrain a generated proto-language (for scenarios). Zero
+// values leave the default sampling unchanged.
+type ProtoOptions struct {
+	Template     string // syllable template, e.g. "CV(C)"
+	MaxSyllables int    // cap on syllables per root
+	FinalGlottal uint32 // per-mille of roots that end in a glottal stop
+	Family       uint8  // family index: roots are FamilyRoot(Family, concept)
+}
+
+// GenerateProtoWith is GenerateProto under constraints.
+func GenerateProtoWith(r *rng.Stream, opt ProtoOptions) *Proto {
 	vpool, cpool := pools()
 	p := &Proto{freqOf: map[phon.FeatureSet]int{}}
 	taken := map[phon.FeatureSet]bool{}
@@ -151,6 +164,9 @@ func GenerateProto(r *rng.Stream) *Proto {
 
 	v := &Variety{Lex: NewLexicon(NumConcepts())}
 	tmpl := []string{"CV", "CV(C)", "(C)V(C)", "(C)(C)V(C)", "(C)(C)V(C)(C)"}[r.Weighted([]uint32{10, 25, 25, 25, 15})]
+	if opt.Template != "" {
+		tmpl = opt.Template
+	}
 	v.Phonotax.Template, _ = phon.ParseTemplate(tmpl)
 	v.Phonotax.Template.LongV = long
 	v.Phonotax.SClusters = v.Phonotax.Template.MaxOnset >= 2
@@ -160,23 +176,40 @@ func GenerateProto(r *rng.Stream) *Proto {
 	}
 	v.Epenth = phon.Segment{F: p.epenthetic()}
 	p.Variety = v
+	p.maxSyl = opt.MaxSyllables
+	glottal := mustLookup("ʔ")
+	if opt.FinalGlottal > 0 {
+		add(glottal, 300, false)
+		if v.Phonotax.Template.MaxCoda < 1 {
+			v.Phonotax.Template.MaxCoda = 1
+		}
+	}
+	var gr *rng.Stream
+	if opt.FinalGlottal > 0 {
+		gr = rng.New(r.Uint64(), rng.Key("glottal"))
+	}
 
 	seen := map[uint64]bool{}
 	for _, c := range Concepts() {
 		var w phon.Word
 		for try := 0; try < 40; try++ {
 			w = p.root(r, c.Freq)
+			if gr != nil && w.Segs[len(w.Segs)-1].IsVowel() && gr.Permille(opt.FinalGlottal) { // ends in a vowel: add ʔ
+				w.Segs = append(w.Segs, phon.Segment{F: glottal})
+				phon.AssignStress(&w, v.Stress)
+			}
 			h := FormHash(w)
 			if !seen[h] {
 				seen[h] = true
 				break
 			}
 		}
-		v.Set(c.ID, Lexeme{Concept: c.ID, Form: w, Freq: c.Freq, Stratum: Native, Etym: ProtoRoot(c.ID), Hash: FormHash(w)})
+		v.Set(c.ID, Lexeme{Concept: c.ID, Form: w, Freq: c.Freq, Stratum: Native, Etym: FamilyRoot(opt.Family, c.ID), Hash: FormHash(w)})
 	}
 	p.genSenses(rng.New(r.Uint64(), rng.Key("senses")))
 	p.genMorph(rng.New(r.Uint64(), rng.Key("morph")))
-	v.Key = 0x1505
+	v.Family = opt.Family
+	v.Key = 0x1505 ^ uint64(opt.Family)<<40
 	return p
 }
 
@@ -232,6 +265,9 @@ func (p *Proto) root(r *rng.Stream, freq uint8) phon.Word {
 		nsyl = 2 + r.IntN(2)
 	default:
 		nsyl = []int{2, 3, 3}[r.IntN(3)]
+	}
+	if p.maxSyl > 0 {
+		nsyl = min(nsyl, p.maxSyl)
 	}
 	isObstruent := func(f phon.FeatureSet) bool { return !f.Has(phon.Sonorant) }
 	isLiquidGlide := func(f phon.FeatureSet) bool {

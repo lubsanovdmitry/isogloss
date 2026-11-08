@@ -1,0 +1,15 @@
+name: Tone delta
+summary: >-
+  A monosyllabic language whose words often end in a glottal stop, spoken on
+  a coast crossed by many rivers.
+watch: Tonogenesis as final glottals are lost, then register and tone splits.
+ticks: 40
+world:
+  rivers: 18
+proto:
+  template: CV(C)
+  syllables: 1
+  final-glottal: 450
+families:
+  - place: coast
+    radius: 1

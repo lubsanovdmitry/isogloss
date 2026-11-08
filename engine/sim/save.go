@@ -8,15 +8,21 @@ import (
 	"isogloss/engine/history"
 	"isogloss/engine/lex"
 	"isogloss/engine/pop"
+	"isogloss/engine/scenario"
 	"isogloss/engine/tmpl"
 )
 
-// Intervention is a player action, applied at the start of its tick.
+// Intervention is a player action or a scripted scenario event, applied
+// at the start of its tick. Kinds: rule (a forced sound change), collapse,
+// plague, famine, migrate, conquer, script, standard, route, invent,
+// seafaring.
 type Intervention struct {
-	Tick int32
-	Kind string // "rule"
-	Hex  int32  // origin hex; -1 = every community at once
-	Rule string // rule source (Prelude classes available)
+	Tick   int32
+	Kind   string
+	Hex    int32  // where (origin of a rule; -1 = every community / anywhere)
+	From   int32  // migrate: origin; route: the other end (-1 none)
+	Polity int32  // collapse, conquer, script, standard, seafaring: polity index
+	Rule   string // rule source; script type; concept label (invent)
 }
 
 // Save is everything needed to rebuild a run.
@@ -25,22 +31,51 @@ type Save struct {
 	Seed          uint64
 	Config        Config
 	Tick          int32
+	Scenario      string // scenario source, "" for none
 	Interventions []Intervention
 }
 
 // SaveState captures the run for replay.
 func (s *Sim) SaveState() Save {
-	return Save{Version: 1, Seed: s.Seed, Config: s.Cfg, Tick: s.Tick, Interventions: slices.Clone(s.Interventions)}
+	sv := Save{Version: 1, Seed: s.Seed, Config: s.Cfg, Tick: s.Tick, Interventions: slices.Clone(s.Interventions)}
+	if s.Scenario != nil {
+		sv.Scenario = s.Scenario.Src
+	}
+	return sv
 }
 
-// Replay rebuilds a run from a save.
+// Replay rebuilds a run from a save. The scenario's own events are
+// rescheduled by NewScenario; the save's list already holds them, so it
+// replaces them.
 func Replay(sv Save) *Sim {
-	s := New(sv.Seed, sv.Config)
+	s, err := ReplayErr(sv)
+	if err != nil {
+		panic(err)
+	}
+	return s
+}
+
+// ReplayErr is Replay for saves whose scenario may not parse.
+func ReplayErr(sv Save) (*Sim, error) {
+	var sc *scenario.Scenario
+	if sv.Scenario != "" {
+		var err error
+		if sc, err = scenario.Read(sv.Scenario); err != nil {
+			return nil, err
+		}
+	}
+	s, err := NewScenario(sv.Seed, sv.Config, sc)
+	if err != nil {
+		return nil, err
+	}
+	if sc != nil {
+		s.Cfg = sv.Config // the save's config already has the overrides
+	}
 	s.Interventions = slices.Clone(sv.Interventions)
 	for s.Tick < sv.Tick {
 		s.Step()
 	}
-	return s
+	return s, nil
 }
 
 // Fork returns a save of this run truncated at tick t (interventions after
@@ -60,25 +95,61 @@ func (s *Sim) Fork(t int32) Save {
 
 // Intervene schedules an intervention for the next tick after validating it.
 func (s *Sim) Intervene(iv Intervention) error {
-	switch iv.Kind {
-	case "rule":
-		if _, err := tmpl.Compile(iv.Rule); err != nil {
-			return err
-		}
-		if iv.Hex >= 0 && (int(iv.Hex) >= len(s.ByHex) || s.ByHex[iv.Hex] == nil) {
-			return errors.New("sim: hex is not settled")
-		}
-	default:
-		return errors.New("sim: unknown intervention " + iv.Kind)
+	if err := s.validate(iv); err != nil {
+		return err
+	}
+	if iv.Hex >= 0 && iv.Kind == "rule" && (int(iv.Hex) >= len(s.ByHex) || s.ByHex[iv.Hex] == nil) {
+		return errors.New("sim: hex is not settled")
 	}
 	iv.Tick = s.Tick + 1
 	s.Interventions = append(s.Interventions, iv)
 	return nil
 }
 
+// validate checks what can be checked before the intervention's tick.
+func (s *Sim) validate(iv Intervention) error {
+	land := func(h int32) bool { return h >= 0 && int(h) < len(s.World.Hexes) && s.World.Hexes[h].Land() }
+	switch iv.Kind {
+	case "rule":
+		if _, err := tmpl.Compile(iv.Rule); err != nil {
+			return err
+		}
+	case "collapse", "standard", "seafaring", "script":
+		if iv.Polity < 0 {
+			return errors.New("sim: " + iv.Kind + " needs a polity")
+		}
+		if iv.Kind == "script" && iv.Rule != "" && iv.Rule != "alphabet" && iv.Rule != "abjad" && iv.Rule != "syllabary" {
+			return errors.New("sim: unknown script " + iv.Rule)
+		}
+	case "plague", "famine":
+		if iv.Hex >= 0 && !land(iv.Hex) {
+			return errors.New("sim: " + iv.Kind + " needs a land hex")
+		}
+	case "migrate", "route":
+		if !land(iv.Hex) || !land(iv.From) {
+			return errors.New("sim: " + iv.Kind + " needs two land hexes")
+		}
+	case "conquer":
+		if !land(iv.Hex) || iv.Polity < 0 {
+			return errors.New("sim: conquer needs a polity and a land hex")
+		}
+	case "invent":
+		if _, ok := lex.ConceptByLabel(iv.Rule); !ok || !land(iv.Hex) {
+			return errors.New("sim: invent needs a known concept and a land hex")
+		}
+	default:
+		return errors.New("sim: unknown intervention " + iv.Kind)
+	}
+	return nil
+}
+
 func (s *Sim) applyInterventions() {
 	for _, iv := range s.Interventions {
-		if iv.Tick != s.Tick || iv.Kind != "rule" {
+		if iv.Tick != s.Tick {
+			continue
+		}
+		if iv.Kind != "rule" {
+			s.applyEvent(iv)
 			continue
 		}
 		rule, err := tmpl.Compile(iv.Rule)

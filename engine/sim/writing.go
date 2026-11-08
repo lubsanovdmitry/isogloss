@@ -2,6 +2,7 @@ package sim
 
 import (
 	"isogloss/engine/contact"
+	"isogloss/engine/fx"
 	"isogloss/engine/history"
 	"isogloss/engine/lex"
 	"isogloss/engine/pop"
@@ -16,7 +17,7 @@ const (
 	standardPerm     = 40  // a polity that writes fixes a standard
 	reformPerm       = 40  // a spelling reform, when spelling has drifted far
 	reformGap        = 300 // mean spelling gap (per mille) that invites reform
-	levelPermille    = 40  // a community levels one word to its capital's
+	levelPermille    = 150 // a community levels one word to its capital's
 	learnedPermille  = 30  // under diglossia, a community takes a learned loan
 	vernacularPerm   = 15  // the vernacular replaces a classical standard
 )
@@ -67,6 +68,15 @@ func (s *Sim) writing() {
 			s.conservative = append(s.conservative, p.Capital)
 		}
 	}
+	if len(s.normOf) != len(s.ByHex) {
+		s.normOf = make([]int32, len(s.ByHex))
+	}
+	for h, c := range s.ByHex {
+		s.normOf[h] = -1
+		if p := s.polityOf(c); p != nil && p.Standard != nil && !c.Foreign {
+			s.normOf[h] = p.ID
+		}
+	}
 }
 
 func (s *Sim) adoptScript(r *rng.Stream, p *society.Polity, v *lex.Variety) {
@@ -105,12 +115,23 @@ func (s *Sim) proposeStandard(r *rng.Stream, c *pop.Community) {
 	if capC.Lang != c.Lang {
 		return
 	}
+	// Both happen community by community, so each community takes the
+	// change at once (no wave); communities taking the same word share one
+	// innovation.
 	if r.Permille(levelPermille) {
 		con := lex.ConceptID(r.IntN(lex.NumConcepts()))
 		if l, k := c.Variety.Lex.At(con), capC.Variety.Lex.At(con); !k.Absent() && l.Etym != k.Etym {
-			if lc, kind := s.takeWord(r, c, capC, con, false); lc != nil {
-				lc.How = "levelled to the speech of " + p.Name
-				s.newInnov(r, &history.Innovation{Kind: kind, Lex: lc, Stress: -1}, c.Hex)
+			key := [4]int32{p.ID, 0, int32(con), int32(k.Etym)}
+			in := s.levels[key]
+			if in == nil {
+				if lc, kind := s.takeWord(r, c, capC, con, false); lc != nil {
+					lc.How = "levelled to the speech of " + p.Name
+					in = s.register(&history.Innovation{Kind: kind, Lex: lc, Stress: -1}, c.Hex)
+					s.levels[key] = in
+				}
+			}
+			if in != nil {
+				s.adopt(c, in)
 			}
 		}
 	}
@@ -118,10 +139,42 @@ func (s *Sim) proposeStandard(r *rng.Stream, c *pop.Community) {
 		std := p.Standard
 		if con, ok := s.pickLoan(r, c.Variety, std); ok {
 			src := std.Lex.At(con)
-			lc := &history.LexChange{Concept: con, Form: contact.Nativize(src.Form, c.Variety, false), Freq: c.Variety.Lex.At(con).Freq,
-				Etym: src.Etym, From: -1, Source: src.Form, Stratum: lex.Stratum{Kind: lex.Learned, Donor: p.ID, Tick: s.Tick},
-				How: "learned loan from Classical " + p.Name + " ⟨" + p.Script.SpellingOf(con, src) + "⟩"}
-			s.newInnov(r, &history.Innovation{Kind: history.Loan, Lex: lc, Stress: -1}, c.Hex)
+			key := [4]int32{p.ID, 1, int32(con), int32(src.Etym)}
+			in := s.levels[key]
+			if in == nil {
+				lc := &history.LexChange{Concept: con, Form: contact.Nativize(src.Form, capC.Variety, false), Freq: c.Variety.Lex.At(con).Freq,
+					Etym: src.Etym, From: -1, Source: src.Form, Stratum: lex.Stratum{Kind: lex.Learned, Donor: p.ID, Tick: s.Tick},
+					How: "learned loan from Classical " + p.Name + " ⟨" + p.Script.SpellingOf(con, src) + "⟩"}
+				in = s.register(&history.Innovation{Kind: history.Loan, Lex: lc, Stress: -1}, c.Hex)
+				s.levels[key] = in
+			}
+			s.adopt(c, in)
+		}
+	}
+}
+
+// broadcastQ16 is how much of the way toward full adoption a community
+// following a written standard moves each tick once the capital has
+// adopted an innovation (the norm spreads from the top).
+var broadcastQ16 = fx.FromPermille(300)
+
+// broadcast pushes what a standard's capital has adopted out to every
+// community that follows that standard, whatever the distance: the
+// capital's speech carries the prestige of administration and letters,
+// even once the written standard itself has turned classical.
+func (s *Sim) broadcast(l *liveInnov) {
+	if len(s.normOf) == 0 {
+		return
+	}
+	for _, p := range s.Polities {
+		if !p.Alive() || p.Standard == nil || !l.wave.Applied[p.Capital] {
+			continue
+		}
+		for h, n := range s.normOf {
+			if n == p.ID && !l.wave.Applied[h] {
+				a := l.wave.Level[h]
+				l.wave.Level[h] = a + fx.Q16(int64(fx.One-a)*int64(broadcastQ16)>>16)
+			}
 		}
 	}
 }

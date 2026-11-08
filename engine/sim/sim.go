@@ -11,6 +11,7 @@ import (
 	"isogloss/engine/lex"
 	"isogloss/engine/pop"
 	"isogloss/engine/rng"
+	"isogloss/engine/scenario"
 	"isogloss/engine/society"
 	"isogloss/engine/world"
 )
@@ -64,6 +65,8 @@ type Config struct {
 	// ScriptRate: per-mille chance per tick that a large polity with no
 	// writing neighbour invents a script.
 	ScriptRate uint32
+	// Seafaring: every coastal community can cross the sea (scenarios).
+	Seafaring bool
 }
 
 // DefaultConfig returns the standard configuration.
@@ -71,7 +74,7 @@ func DefaultConfig() Config {
 	return Config{
 		World:          world.DefaultConfig,
 		SoundRate:      60,
-		LexRate:        560,
+		LexRate:        520,
 		Candidates:     4,
 		ClusterEvery:   4,
 		SmallBias:      500,
@@ -123,13 +126,16 @@ type liveInnov struct {
 
 // Sim is one simulation run.
 type Sim struct {
-	Seed  uint64
-	Cfg   Config
-	Tick  int32
-	World *world.World
-	Proto *lex.Proto
-	Reg   *history.Registry
-	Roots []history.Root
+	Seed   uint64
+	Cfg    Config
+	Tick   int32
+	World  *world.World
+	Proto  *lex.Proto   // the first family's proto-language (Protos[0])
+	Protos []*lex.Proto // one per language family
+	Reg    *history.Registry
+	// Scenario the run started from, nil for the default start.
+	Scenario *scenario.Scenario
+	Roots    []history.Root
 
 	ByHex []*pop.Community // nil for unsettled hexes
 	Langs []*Language      // all languages ever, by ID
@@ -167,44 +173,14 @@ type Sim struct {
 	// conservative: capitals with a written standard, which take up
 	// innovations more slowly.
 	conservative []int32
-}
-
-// New creates a run at tick 0: map, proto-language and homeland.
-func New(seed uint64, cfg Config) *Sim {
-	s := &Sim{
-		Seed: seed, Cfg: cfg,
-		World:      world.Generate(seed, cfg.World),
-		Proto:      lex.GenerateProto(rng.New(seed, rng.Key("proto"))),
-		Reg:        &history.Registry{},
-		vars:       map[uint64]*lex.Variety{},
-		cl:         pop.NewClusterer(),
-		nextRoot:   lex.FirstCoinedRoot,
-		subRoots:   map[[2]int32]lex.EtymID{},
-		hub:        map[int32]bool{},
-		routeEdge:  map[[2]int32]bool{},
-		routeLinks: map[int32][]int32{},
-	}
-	if cfg.Threshold > 0 {
-		s.cl.Thr = fx.FromPermille(cfg.Threshold)
-	}
-	s.ap = history.NewApplier(s.Reg)
-	n := len(s.World.Hexes)
-	s.ByHex = make([]*pop.Community, n)
-	s.present = make([]bool, n)
-	s.prestige = make([]fx.Q16, n)
-	s.vars[s.Proto.Variety.Key] = s.Proto.Variety
-
-	home := s.homeland()
-	s.setupContact(home)
-	for _, h := range s.World.Land {
-		if s.World.Distance(home, h) <= cfg.HomelandRadius {
-			s.settle(h, 400, s.Proto.Variety, nil)
-		}
-	}
-	s.log(history.Event{Kind: "settle", Hex: home, Lang: -1, Text: "the proto-language is spoken around the homeland"})
-	s.refreshContacts()
-	s.cluster()
-	return s
+	// FixedRoutes are trade routes set by events; they always run.
+	FixedRoutes [][2]int32
+	// normOf: per hex, the polity whose standard (and capital's speech) its
+	// community follows (-1 none).
+	normOf []int32
+	// levels holds one levelling or learned-loan innovation per (polity,
+	// kind, concept, root), reused by every community that takes it.
+	levels map[[4]int32]*history.Innovation
 }
 
 // homeland picks the most fertile hex near the middle of the continent.
@@ -230,7 +206,7 @@ func (s *Sim) settle(h, people int32, v *lex.Variety, from *pop.Community) {
 	if from != nil {
 		c.Lang = from.Lang
 		if p := s.polityOf(from); p != nil && s.World.Distance(p.Capital, h) <= maxReach {
-			c.Polity, c.Joined = p.ID, s.Tick // colonists stay subjects
+			c.Polity, c.Joined, c.Foreign = p.ID, s.Tick, from.Foreign // colonists stay subjects
 		}
 		c.Diffusing = append([]pop.Diffusion(nil), from.Diffusing...)
 		for _, l := range s.live {
@@ -361,6 +337,9 @@ func (s *Sim) grow() {
 		people := col.from.Pop / 3
 		col.from.Pop -= people
 		s.settle(col.to, people, col.from.Variety, col.from)
+		if !slices.Contains(s.World.Hexes[col.from.Hex].Nbr[:], col.to) {
+			s.founderEffect(s.ByHex[col.to]) // a small group crossed the sea
+		}
 	}
 }
 
@@ -410,8 +389,12 @@ func (s *Sim) spread() {
 			if slices.Contains(s.conservative, int32(h)) {
 				f /= 2 // the seat of a written standard changes slowly
 			}
+			if p := s.normOf[h]; p >= 0 && s.Polities[p].Capital != l.in.Origin {
+				f = f * 20 / 100 // the norm resists innovations from elsewhere
+			}
 			return int32(int64(l.in.Rate) * f / 1000)
 		}
+		s.broadcast(l)
 		for _, h := range l.wave.Step(s.present, s.contacts, s.prestige, s.lang, barrier, rate, spreading) {
 			crossings = append(crossings, cross{l, h})
 		}
@@ -446,7 +429,22 @@ func (s *Sim) adopt(c *pop.Community, in *history.Innovation) {
 		e.Lo = 5
 		c.Diffusing = append(c.Diffusing, pop.Diffusion{Innov: in.ID, Next: 4, Step: -1})
 	}
-	c.Variety = s.intern(s.ap.Apply(c.Variety, e))
+	c.Variety = s.apply(c.Variety, e)
+}
+
+// apply adopts entry e in variety v. A word change that would change
+// nothing here (the gap is filled, the word is already this one) is not
+// recorded, so it costs nothing and leaves the variety shared.
+func (s *Sim) apply(v *lex.Variety, e lex.Entry) *lex.Variety {
+	if in := s.Reg.Get(e.Innov); in.Lex != nil {
+		if _, _, ok := history.NewForm(v, in); !ok {
+			return v
+		}
+		if l := v.Lex.At(in.Lex.Concept); l.Etym == in.Lex.Etym && l.Stratum == in.Lex.Stratum && in.Lex.From < 0 && in.Kind == history.Lexical {
+			return v // the same word already
+		}
+	}
+	return s.intern(s.ap.Apply(v, e))
 }
 
 // diffuse extends lexically diffusing changes by one frequency class per
@@ -463,7 +461,7 @@ func (s *Sim) diffuse() {
 				continue // stalled
 			}
 			e := lex.Entry{Kind: lex.EntryInnov, Innov: d.Innov, Tick: s.Tick, Lo: d.Next, Hi: d.Next}
-			c.Variety = s.intern(s.ap.Apply(c.Variety, e))
+			c.Variety = s.apply(c.Variety, e)
 			next := int8(d.Next) + d.Step
 			if next >= 1 && next <= 5 {
 				d.Next = uint8(next)

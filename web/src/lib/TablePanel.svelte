@@ -91,7 +91,7 @@
   <div class="wrap">
     <table>
       <thead>
-        <tr><th scope="col">Concept</th>{#each table.langs as l, i (i)}<th scope="col" class:proto={i === 0}>{l}</th>{/each}</tr>
+        <tr><th scope="col">Concept</th>{#each table.langs as l, i (i)}<th scope="col" class:proto={i < table.protos}>{l}</th>{/each}</tr>
       </thead>
       <tbody>
         {#each rows as r (r.id)}
@@ -104,7 +104,7 @@
                 <td class="none" title="no word: the thing is not known here">—</td>
               {:else}
                 <td class="ipa" style:background={cogTint(r.cog[i])} title={cellTitle(r, i) || undefined}>
-                  {i === 0 ? '*' : ''}{f}{#if l}<sup class="mk {l[1] === 'substrate' ? 'sub' : 'loan'}">{l[1] === 'loan' ? 'L' : l[1] === 'learned' ? 'B' : 'S'}</sup>{/if}{#if d}<sup class="mk dbl">D</sup>{/if}
+                  {i < table.protos ? '*' : ''}{f}{#if l}<sup class="mk {l[1] === 'substrate' ? 'sub' : 'loan'}">{l[1] === 'loan' ? 'L' : l[1] === 'learned' ? 'B' : 'S'}</sup>{/if}{#if d}<sup class="mk dbl">D</sup>{/if}
                 </td>
               {/if}
             {/each}

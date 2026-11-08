@@ -111,7 +111,10 @@ func (s *Sim) cluster() {
 	s.buildTree()
 
 	// Drop varieties nobody speaks and their cached intelligibility.
-	live := map[uint64]bool{s.Proto.Variety.Key: true}
+	live := map[uint64]bool{}
+	for _, p := range s.Protos {
+		live[p.Variety.Key] = true
+	}
 	for _, c := range comms {
 		live[c.Variety.Key] = true
 	}
@@ -173,11 +176,17 @@ func (s *Sim) nameFor(v *lex.Variety, first bool) string {
 	}
 }
 
-// ProtoName names the proto-language.
-func (s *Sim) ProtoName() string {
+// ProtoName names the (first) proto-language.
+func (s *Sim) ProtoName() string { return s.FamilyName(0) }
+
+// FamilyName names family f's proto-language.
+func (s *Sim) FamilyName(f uint8) string {
 	c, _ := lex.ConceptByLabel("person")
-	return "Proto-" + phon.Capitalize(phon.Romanize(s.Proto.Variety.Lex.At(c).Form))
+	return "Proto-" + phon.Capitalize(phon.Romanize(s.Protos[f].Variety.Lex.At(c).Form))
 }
+
+// ProtoOf returns the proto-language a variety descends from.
+func (s *Sim) ProtoOf(v *lex.Variety) *lex.Variety { return s.Protos[v.Family].Variety }
 
 // LivingLanguages returns spoken languages in ID order.
 func (s *Sim) LivingLanguages() []*Language {

@@ -32,7 +32,12 @@ func segKey(s phon.Segment) string {
 // sets seen at least minCount times are returned, grouped by proto-segment
 // in inventory order and most frequent first.
 func Correspondences(s *sim.Sim, minCount int) (langs []string, out []Correspondence) {
-	ls := s.LivingLanguages()
+	var ls []*sim.Language
+	for _, l := range s.LivingLanguages() {
+		if s.CentreVariety(l).Family == 0 { // correspondences within the first family
+			ls = append(ls, l)
+		}
+	}
 	for _, l := range ls {
 		langs = append(langs, l.Name)
 	}
@@ -54,7 +59,7 @@ func Correspondences(s *sim.Sim, minCount int) (langs []string, out []Correspond
 		if !c.Core() {
 			continue
 		}
-		root := lex.ProtoRoot(c.ID)
+		root := lex.ProtoRoot(c.ID) // the first family: other families' words have other roots
 		pw := s.Proto.Variety.Lex.At(c.ID).Form.Segs
 		aligns := make([][]int, len(vars))
 		ok := true

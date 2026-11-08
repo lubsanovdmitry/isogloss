@@ -300,6 +300,9 @@ func (a *Applier) applySound(v, nv *lex.Variety, in *Innovation, e lex.Entry) {
 		if !covers(e, l.Freq) {
 			continue
 		}
+		if !in.Rule.MayApply(&l.Form) {
+			continue
+		}
 		k := memoKey{l.Hash, ctx}
 		mv, ok := memo[k]
 		if !ok {
@@ -333,6 +336,9 @@ func (a *Applier) applySound(v, nv *lex.Variety, in *Innovation, e lex.Entry) {
 			continue
 		}
 		for k, f := range p.Forms {
+			if !in.Rule.MayApply(&f) {
+				continue
+			}
 			mk := memoKey{p.Hash[k], ctx}
 			mv, ok := memo[mk]
 			if !ok {

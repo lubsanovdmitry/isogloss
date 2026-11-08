@@ -363,6 +363,9 @@ func (c *Clause) Apply(w phon.Word, ph *phon.Phonotactics) (phon.Word, bool) {
 // Apply applies the rule's clauses in order. It reports a change only if the
 // final word differs from the input (clauses may undo each other).
 func (r *Rule) Apply(w phon.Word, ph *phon.Phonotactics) (phon.Word, bool) {
+	if !r.MayApply(&w) {
+		return w, false
+	}
 	out := w
 	for _, c := range r.Clauses {
 		out, _ = c.Apply(out, ph)
@@ -392,4 +395,24 @@ func (f *File) ApplyAll(w phon.Word, ph *phon.Phonotactics) (phon.Word, []Step) 
 		}
 	}
 	return w, steps
+}
+
+// MayApply is a cheap filter: false means no clause can match anywhere in w
+// (none has a target whose first segment occurs in w), so the rule leaves
+// w unchanged. Insertions always may apply. A clause can only create the
+// trigger for a later one if it applies itself, so checking each clause
+// against the original word is enough.
+func (r *Rule) MayApply(w *phon.Word) bool {
+	for _, c := range r.Clauses {
+		if len(c.Target) == 0 || c.Target[0].Kind != ESeg {
+			return true
+		}
+		pat := c.Target[0].Seg
+		for i := range w.Segs {
+			if pat.Match(w, i) {
+				return true
+			}
+		}
+	}
+	return false
 }

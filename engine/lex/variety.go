@@ -13,8 +13,21 @@ type EtymID uint32
 
 const FirstCoinedRoot EtymID = 1 << 16
 
-// ProtoRoot is the root of a concept's word in the proto-language.
-func ProtoRoot(c ConceptID) EtymID { return EtymID(c) + 1 }
+// ProtoRoot is the root of a concept's word in the (first) proto-language.
+func ProtoRoot(c ConceptID) EtymID { return FamilyRoot(0, c) }
+
+// FamilyRoot is the root of a concept's word in family f's proto-language.
+// Families have separate roots, so unrelated words are never cognate.
+func FamilyRoot(f uint8, c ConceptID) EtymID { return EtymID(f)<<10 + EtymID(c) + 1 }
+
+// RootOrigin tells which family and concept an inherited root comes from
+// (ok false for coined roots).
+func RootOrigin(id EtymID) (f uint8, c ConceptID, ok bool) {
+	if id == 0 || id >= FirstCoinedRoot {
+		return 0, 0, false
+	}
+	return uint8(id >> 10), ConceptID(id&1023) - 1, true
+}
 
 // StratumKind says how a word entered a variety.
 type StratumKind uint8
@@ -91,6 +104,7 @@ type Entry struct {
 // between communities (copy-on-write).
 type Variety struct {
 	Key      uint64    // hash of the history
+	Family   uint8     // language family (index of its proto-language)
 	Hist     *HistNode // adoption history, newest first (persistent list)
 	Lex      Lexicon   // indexed by ConceptID
 	Phonotax phon.Phonotactics
@@ -115,6 +129,7 @@ type Variety struct {
 func (v *Variety) Derive(e Entry) *Variety {
 	n := &Variety{
 		Key:      HashEntry(v.Key, e),
+		Family:   v.Family,
 		Hist:     &HistNode{Parent: v.Hist, E: e, N: v.Hist.Len() + 1},
 		Lex:      v.Lex.Clone(),
 		Phonotax: v.Phonotax,

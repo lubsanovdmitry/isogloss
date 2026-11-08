@@ -1,0 +1,199 @@
+package sim
+
+import (
+	"strings"
+	"testing"
+
+	"isogloss/engine/lex"
+	"isogloss/engine/phon"
+	"isogloss/engine/scenario"
+)
+
+func starter(t testing.TB, id string) *scenario.Scenario {
+	st, ok := scenario.StarterByID(id)
+	if !ok {
+		t.Fatalf("no starter %s", id)
+	}
+	sc, err := scenario.Read(st.Src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return sc
+}
+
+// langShape returns the number of living languages, the share (‰) of
+// communities in the largest, and the size of the largest dialect
+// continuum (languages that share a chain of intelligible neighbours).
+func langShape(s *Sim) (n, largest, continuum int) {
+	comms := len(s.Communities())
+	cont := map[int32]int{}
+	for _, l := range s.LivingLanguages() {
+		n++
+		largest = max(largest, len(l.Members)*1000/max(comms, 1))
+		if l.Continuum >= 0 {
+			cont[l.Continuum]++
+		}
+	}
+	for _, k := range cont { //lint:ordered max is order-independent
+		continuum = max(continuum, k)
+	}
+	return n, largest, continuum
+}
+
+// understood is the share (‰) of communities whose speech is intelligible
+// with the speech at hex h.
+func understood(s *Sim, h int32) int {
+	n, ok := 0, 0
+	for _, c := range s.Communities() {
+		n++
+		if s.Intel(s.ByHex[h].Variety, c.Variety) >= s.Threshold() {
+			ok++
+		}
+	}
+	return ok * 1000 / max(n, 1)
+}
+
+// TestEmpireCollapseContinuum is the M4 gate: under the empire most of the
+// continent understands the capital's speech; after the empire falls in
+// year 1000 that unity goes and the family breaks up into a dialect
+// continuum: a chain of languages whose neighbours understand each other
+// but whose ends do not.
+func TestEmpireCollapseContinuum(t *testing.T) {
+	if testing.Short() {
+		t.Skip("slow")
+	}
+	sc := starter(t, "empire-collapse")
+	for _, seed := range []uint64{7, 8, 9} {
+		s, err := NewScenario(seed, DefaultConfig(), sc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s.Run(int(sc.Events[0].Tick) - 1)
+		capital := s.Polities[0].Capital
+		u0 := understood(s, capital)
+		n0, _, _ := langShape(s)
+		s.Run(int(sc.Ticks - s.Tick))
+		u1 := understood(s, capital)
+		n1, _, cont := langShape(s)
+		t.Logf("seed %d: before the fall %d languages, %d‰ understand the capital; %d years later %d languages, %d‰, largest continuum %d languages",
+			seed, n0, u0, (sc.Ticks-sc.Events[0].Tick)*25, n1, u1, cont)
+		if u0 < 500 {
+			t.Errorf("seed %d: under the empire only %d‰ understand the capital", seed, u0)
+		}
+		if u1 >= u0 || n1 <= n0 || cont < 3 {
+			t.Errorf("seed %d: no continuum after the fall (%d → %d languages, continuum of %d, %d‰ → %d‰)", seed, n0, n1, cont, u0, u1)
+		}
+	}
+}
+
+// Every starter scenario sets up and runs a few generations.
+func TestStartersRun(t *testing.T) {
+	for _, st := range scenario.Starters() {
+		sc := starter(t, st.ID)
+		s, err := NewScenario(3, DefaultConfig(), sc)
+		if err != nil {
+			t.Fatalf("%s: %v", st.ID, err)
+		}
+		s.Run(6)
+		if len(s.Protos) != max(1, len(sc.Families)) {
+			t.Errorf("%s: %d families", st.ID, len(s.Protos))
+		}
+		// Scenario runs replay exactly.
+		if r := Replay(s.SaveState()); r.Digest() != s.Digest() {
+			t.Errorf("%s: replay differs", st.ID)
+		}
+	}
+}
+
+// Each starter shows what it says to watch.
+func TestStartersShowWhatTheyPromise(t *testing.T) {
+	if testing.Short() {
+		t.Skip("slow")
+	}
+	t.Run("steppe riders: every outcome of foreign rule", func(t *testing.T) {
+		sc := starter(t, "steppe-riders")
+		s, _ := NewScenario(7, DefaultConfig(), sc)
+		s.Run(int(sc.Ticks))
+		seen := map[string]bool{}
+		for _, e := range s.Log {
+			if e.Kind == "rule" {
+				for _, o := range []string{"elite dominance", "elite assimilation", "stable bilingualism"} {
+					if strings.HasPrefix(e.Text, o) {
+						seen[o] = true
+					}
+				}
+			}
+		}
+		if len(seen) < 2 {
+			t.Errorf("outcomes seen: %v", seen)
+		}
+	})
+	t.Run("tone delta: tonogenesis", func(t *testing.T) {
+		sc := starter(t, "tone-delta")
+		tonal := 0
+		for _, seed := range []uint64{7, 8} {
+			s, _ := NewScenario(seed, DefaultConfig(), sc)
+			s.Run(int(sc.Ticks))
+			for _, l := range s.LivingLanguages() {
+				v := s.CentreVariety(l)
+				for i := 0; i < v.Lex.Len(); i++ {
+					for _, sg := range v.Lex.At(lex.ConceptID(i)).Form.Segs {
+						if sg.Tone != phon.ToneNone {
+							tonal++
+						}
+					}
+				}
+			}
+		}
+		if tonal == 0 {
+			t.Error("no language became tonal")
+		}
+	})
+	t.Run("island hopping: founder losses thin inventories", func(t *testing.T) {
+		sc := starter(t, "island-hopping")
+		lower := 0
+		for _, seed := range []uint64{7, 8, 9, 10} {
+			s, _ := NewScenario(seed, DefaultConfig(), sc)
+			s.Run(int(sc.Ticks))
+			var few, many [2]int
+			for _, c := range s.Communities() {
+				k := 0
+				for _, e := range c.Variety.Adopted() {
+					if e.Kind == lex.EntryInnov && strings.HasPrefix(s.Reg.Get(e.Innov).Template, "founder") {
+						k++
+					}
+				}
+				if k <= 1 {
+					few[0] += len(c.Variety.Inventory())
+					few[1]++
+				} else if k >= 3 {
+					many[0] += len(c.Variety.Inventory())
+					many[1]++
+				}
+			}
+			if few[1] > 0 && many[1] > 0 && many[0]*few[1] < few[0]*many[1] {
+				lower++
+			}
+		}
+		if lower < 3 {
+			t.Errorf("inventories after ≥3 founder losses smaller in only %d of 4 runs", lower)
+		}
+	})
+	t.Run("silk road: words cross families", func(t *testing.T) {
+		sc := starter(t, "silk-road")
+		s, _ := NewScenario(7, DefaultConfig(), sc)
+		s.Run(int(sc.Ticks))
+		for _, l := range s.LivingLanguages() {
+			v := s.CentreVariety(l)
+			cross := 0
+			for i := 0; i < v.Lex.Len(); i++ {
+				if f, _, ok := lex.RootOrigin(v.Lex.At(lex.ConceptID(i)).Etym); ok && f != v.Family {
+					cross++
+				}
+			}
+			if cross == 0 {
+				t.Errorf("%s has no words from other families", l.Name)
+			}
+		}
+	})
+}

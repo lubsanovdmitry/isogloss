@@ -56,10 +56,21 @@ type World struct {
 	Land  []int32 // land hex IDs, ascending
 }
 
+// Shape of the generated land.
+type Shape uint8
+
+const (
+	Continent   Shape = iota
+	Archipelago       // many islands: finer noise, weak falloff
+	Corridor          // a long east–west land strip
+)
+
 // Config controls map generation.
 type Config struct {
-	W, H int32
-	Land int // target number of land hexes
+	W, H   int32
+	Land   int   // target number of land hexes
+	Shape  Shape // continent by default
+	Rivers int   // rivers to trace (0 = default 9)
 }
 
 // DefaultConfig gives ~300 land hexes.
@@ -122,7 +133,16 @@ func Generate(seed uint64, cfg Config) *World {
 			// Radial falloff makes a continent rather than a noise field.
 			dx, dy := (x-cx)*1000/cx, (y-cy*222/256)*1000/(cy*222/256)
 			d2 := (dx*dx + dy*dy) / 1000 // 0..~2000
-			e = e - d2*55/100
+			switch cfg.Shape {
+			case Archipelago:
+				e = (e + valueNoise(s, x*3, y*3, 3)) / 2
+				e = e - d2*20/100
+			case Corridor:
+				d2 = (dx*dx/6 + dy*dy) / 1000
+				e = e - d2*70/100
+			default:
+				e = e - d2*55/100
+			}
 			h.Elev = e
 			h.Moist = valueNoise(s, x, y, 2)
 			for k, off := range nbrOff[r&1] {
@@ -159,7 +179,7 @@ func Generate(seed uint64, cfg Config) *World {
 		}
 	}
 	w.classify()
-	w.rivers(s)
+	w.rivers(s, cfg.Rivers)
 	for i := range w.Hexes {
 		h := &w.Hexes[i]
 		h.Capacity = capacity[h.Biome]
@@ -252,7 +272,10 @@ func (w *World) components() []int32 {
 	return comp
 }
 
-func (w *World) rivers(seed uint64) {
+func (w *World) rivers(seed uint64, want int) {
+	if want <= 0 {
+		want = 9
+	}
 	r := rng.New(seed, rng.Key("rivers"))
 	var sources []int32
 	for _, h := range w.Hexes {
@@ -267,7 +290,7 @@ func (w *World) rivers(seed uint64) {
 	}
 	used := 0
 	for _, src := range sources {
-		if used >= 9 || w.Hexes[src].River {
+		if used >= want || w.Hexes[src].River {
 			continue
 		}
 		cur := src

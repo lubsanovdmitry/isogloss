@@ -54,11 +54,16 @@ needed.
 - [ ] `make test-wasm` crashed in the Go runtime twice during M3 work, with only a GC goroutine dump captured (no first lines); the second time the seed sweeps were already capped at GOMAXPROCS. The two runs since passed. The wasm sim package now takes ~3.5 min (two 12–16-seed sweeps run one seed at a time). If CI shows it again, capture the full log and consider skipping the sweeps under wasm.
 - [ ] Polysemy is still high (30–80 concepts per language share a word with another). Real languages colexify perhaps 15–25% of a 300-concept list.
 
-## M4 · Society and scenarios
+## M4 · Society and scenarios (engine done; docs and wasm check pending)
 
-- [ ] Polities, migration, conquest outcomes, prestige and standards, diglossia, writing and spelling (romanized grapheme names), trade routes, seafaring.
-- [ ] Scenario files (YAML) and the five starter scenarios.
-- [ ] Gate: the Empire collapse scenario produces a dialect continuum (clustering already reports continua).
+- [x] Polities, migration, conquest outcomes (local ruler/local ratio), prestige, trade routes, seafaring, famine, plague.
+- [x] Writing (alphabet, abjad, syllabary), frozen spelling and reforms, standards (top-down spread from the capital, norm damps local innovations), diglossia and learned loans.
+- [x] Several language families (namespaced roots); scenario files (YAML subset, `engine/scenario`), five starters, `isogloss run --scenario`, scenario picker and sandbox events in the UI.
+- [x] Gate: `TestEmpireCollapseContinuum` (seeds 7–9: 72–100% understand the capital under the empire, 22–30% 800 years after the fall, continua of 7–10 languages).
+- [ ] Run `make test-wasm` alone and confirm (not run after the last M4 changes).
+- [ ] Write the M4 section of docs/IMPLEMENTATION.md and update README status.
+- [ ] Scenario runs that settle the whole map at year 0 are slow: Empire collapse takes ~14 s per 1000 years in the browser (default run ~3.7 s).
+- [ ] Island hopping's founder effect is real but small (inventories 1–7 phonemes smaller after 3+ founder losses).
 
 ## M5 · Campaign and LLM
 

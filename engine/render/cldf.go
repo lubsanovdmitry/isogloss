@@ -71,7 +71,7 @@ func CLDF(s *sim.Sim) map[string]string {
 	var langs, params, forms, cogs strings.Builder
 	csvRow(&langs, "ID", "Name", "Is_Proto")
 	for i, l := range t.Langs {
-		csvRow(&langs, langID(i), l, strconv.FormatBool(i == 0))
+		csvRow(&langs, langID(i), l, strconv.FormatBool(i < t.Protos))
 	}
 	csvRow(&params, "ID", "Name", "Concepticon_ID", "Concepticon_Gloss")
 	for _, c := range lex.Concepts() {
@@ -79,7 +79,10 @@ func CLDF(s *sim.Sim) map[string]string {
 	}
 	csvRow(&forms, "ID", "Language_ID", "Parameter_ID", "Value", "Form", "Segments", "Loan", "Comment")
 	csvRow(&cogs, "ID", "Form_ID", "Cognateset_ID")
-	vars := []*lex.Variety{s.Proto.Variety}
+	var vars []*lex.Variety
+	for _, p := range s.Protos {
+		vars = append(vars, p.Variety)
+	}
 	for _, l := range s.LivingLanguages() {
 		vars = append(vars, s.CentreVariety(l))
 	}

@@ -102,6 +102,13 @@ func (j *JSON) Null() *JSON {
 	return j
 }
 
+// Raw writes an already-encoded JSON value.
+func (j *JSON) Raw(b []byte) *JSON {
+	j.pre()
+	j.buf = append(j.buf, b...)
+	return j
+}
+
 // KS, KI, KU, KB write a key with a value.
 func (j *JSON) KS(k, v string) *JSON        { return j.K(k).S(v) }
 func (j *JSON) KI(k string, v int64) *JSON  { return j.K(k).I(v) }

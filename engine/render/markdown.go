@@ -29,7 +29,7 @@ func GrammarMarkdown(s *sim.Sim, id int32) string {
 	pm := func(x int) string { return strconv.Itoa(x/1000) + "." + strconv.Itoa(x%1000/10 + 100)[1:] }
 	ty := v.Typology()
 	w("# ", l.Name, "\n\n")
-	w("A descendant of ", s.ProtoName(), ", spoken in ", strconv.Itoa(len(l.Members)), " communities")
+	w("A descendant of ", s.FamilyName(v.Family), ", spoken in ", strconv.Itoa(len(l.Members)), " communities")
 	if l.Born > 0 {
 		w(", a separate language since year ", strconv.Itoa(int(l.Born)*25))
 	}

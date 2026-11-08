@@ -10,6 +10,7 @@ import (
 	"isogloss/engine/morph"
 	"isogloss/engine/phon"
 	"isogloss/engine/pop"
+	"isogloss/engine/scenario"
 	"isogloss/engine/sim"
 	"isogloss/engine/society"
 	"isogloss/engine/tmpl"
@@ -46,7 +47,7 @@ func innovLabel(s *sim.Sim, id uint32) string { return s.Reg.Get(id).Label() }
 // tree, and events from index sinceEvent on.
 func SnapshotJSON(s *sim.Sim, sinceEvent int) []byte {
 	var j JSON
-	j.Obj().KI("tick", int64(s.Tick)).KS("proto", s.ProtoName()).
+	j.Obj().KI("tick", int64(s.Tick)).KS("proto", s.ProtoName()).KI("families", int64(len(s.Protos))).K("scenario").Raw(ScenarioJSON(s)).
 		KI("innovations", int64(len(s.Reg.All))).KI("live", int64(s.LiveCount()))
 	j.K("comms").Arr()
 	for _, c := range s.Communities() {
@@ -152,7 +153,8 @@ func RootDesc(s *sim.Sim, id lex.EtymID) string {
 	case id == 0:
 		return ""
 	case id < lex.FirstCoinedRoot:
-		return s.ProtoName() + " root of '" + lex.Concepts()[id-1].Label + "'"
+		f, c, _ := lex.RootOrigin(id)
+		return s.FamilyName(f) + " root of '" + lex.Concepts()[c].Label + "'"
 	}
 	for _, r := range s.Roots {
 		if r.ID == id {
@@ -205,10 +207,11 @@ func EtymOf(s *sim.Sim, hex int32, c lex.ConceptID) (*Etym, bool) {
 		return nil, false
 	}
 	com := s.ByHex[hex]
-	steps, final := history.Trace(s.Reg, s.Proto.Variety, com.Variety, c)
+	proto := s.ProtoOf(com.Variety)
+	steps, final := history.Trace(s.Reg, proto, com.Variety, c)
 	e := &Etym{
-		Concept: lex.Concepts()[c], Hex: hex, Proto: phon.RenderWord(s.Proto.Variety.Lex.At(c).Form),
-		ProtoLng: s.ProtoName(), Form: phon.RenderWord(final.Form), Steps: steps,
+		Concept: lex.Concepts()[c], Hex: hex, Proto: phon.RenderWord(proto.Lex.At(c).Form),
+		ProtoLng: s.FamilyName(com.Variety.Family), Form: phon.RenderWord(final.Form), Steps: steps,
 	}
 	if com.Lang >= 0 {
 		e.Lang = s.Langs[com.Lang].Name
@@ -217,7 +220,7 @@ func EtymOf(s *sim.Sim, hex int32, c lex.ConceptID) (*Etym, bool) {
 	switch {
 	case final.Absent():
 		e.Root = "no word: the thing is not known here yet"
-	case final.Etym == lex.ProtoRoot(c) && !final.Stratum.Loan():
+	case final.Etym == lex.FamilyRoot(com.Variety.Family, c) && !final.Stratum.Loan():
 		e.Root = "inherited from " + e.ProtoLng
 	default:
 		e.Root = RootDesc(s, final.Etym)
@@ -297,8 +300,9 @@ func (e *Etym) JSON() []byte {
 // Table is a comparative word list: concepts × languages, with cognate
 // classes per row (same root = same class; class 0 is the proto root).
 type Table struct {
-	Langs []string
-	Rows  []TableRow
+	Protos int // the first Protos columns are proto-languages
+	Langs  []string
+	Rows   []TableRow
 }
 
 // TableRow is one concept.
@@ -314,7 +318,10 @@ type TableRow struct {
 // represented by its centre community). core restricts to Swadesh-207.
 func Compare(s *sim.Sim, core bool) Table {
 	langs := s.LivingLanguages()
-	t := Table{Langs: []string{s.ProtoName()}}
+	t := Table{Protos: len(s.Protos)}
+	for f := range s.Protos {
+		t.Langs = append(t.Langs, s.FamilyName(uint8(f)))
+	}
 	for _, l := range langs {
 		t.Langs = append(t.Langs, l.Name)
 	}
@@ -345,7 +352,9 @@ func Compare(s *sim.Sim, core bool) Table {
 			row.Forms = append(row.Forms, phon.RenderWord(l.Form))
 			row.Cog = append(row.Cog, k)
 		}
-		add(s.Proto.Variety)
+		for _, p := range s.Protos {
+			add(p.Variety)
+		}
 		for _, l := range langs {
 			add(s.CentreVariety(l))
 		}
@@ -359,7 +368,7 @@ func Compare(s *sim.Sim, core bool) Table {
 // [[language index, other concept]].
 func (t Table) JSON(s *sim.Sim) []byte {
 	var j JSON
-	j.Obj().K("langs").Arr()
+	j.Obj().KI("protos", int64(t.Protos)).K("langs").Arr()
 	for _, l := range t.Langs {
 		j.S(l)
 	}
@@ -670,7 +679,7 @@ func PlaceJSON(s *sim.Sim, hex int32) []byte {
 		return j.Null().Bytes()
 	}
 	p := &s.Places[hex]
-	by := s.ProtoName()
+	by := s.FamilyName(p.Fam)
 	if p.Sub >= 0 {
 		by = s.Subs[p.Sub].Name
 	}
@@ -734,4 +743,35 @@ func writingJSON(j *JSON, s *sim.Sim, c *pop.Community) {
 			KS("form", phon.RenderWord(capV.Lex.At(x.c).Form)).KS("now", o.Write(capV.Lex.At(x.c).Form)).KI("gap", int64(x.gap)).End()
 	}
 	j.EndArr().End()
+}
+
+// ScenariosJSON lists the starter scenarios.
+func ScenariosJSON() []byte {
+	var j JSON
+	j.Arr()
+	for _, st := range scenario.Starters() {
+		sc, err := scenario.Read(st.Src)
+		if err != nil {
+			continue
+		}
+		j.Obj().KS("id", st.ID).KS("name", sc.Name).KS("summary", sc.Summary).KS("watch", sc.Watch).KI("ticks", int64(sc.Ticks)).
+			KI("families", int64(max(1, len(sc.Families)))).End()
+	}
+	j.EndArr()
+	return j.Bytes()
+}
+
+// ScenarioJSON describes the run's scenario (null without one).
+func ScenarioJSON(s *sim.Sim) []byte {
+	var j JSON
+	sc := s.Scenario
+	if sc == nil {
+		return j.Null().Bytes()
+	}
+	j.Obj().KS("name", sc.Name).KS("summary", sc.Summary).KS("watch", sc.Watch).KI("ticks", int64(sc.Ticks)).K("events").Arr()
+	for _, e := range sc.Events {
+		j.Obj().KI("tick", int64(e.Tick)).KS("do", e.Do).End()
+	}
+	j.EndArr().End()
+	return j.Bytes()
 }

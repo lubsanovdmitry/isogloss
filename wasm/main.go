@@ -23,6 +23,7 @@ import (
 
 	"isogloss/engine/lex"
 	"isogloss/engine/render"
+	"isogloss/engine/scenario"
 	"isogloss/engine/sim"
 )
 
@@ -52,9 +53,10 @@ func str(v js.Value, k string) string {
 func saveJSON(sv sim.Save) string {
 	var j render.JSON
 	j.Obj().KI("version", int64(sv.Version)).KS("seed", strconv.FormatUint(sv.Seed, 10)).
-		KI("tick", int64(sv.Tick)).KI("threshold", int64(sv.Config.Threshold)).K("interventions").Arr()
+		KI("tick", int64(sv.Tick)).KI("threshold", int64(sv.Config.Threshold)).KS("scenario", sv.Scenario).K("interventions").Arr()
 	for _, iv := range sv.Interventions {
-		j.Obj().KI("tick", int64(iv.Tick)).KS("kind", iv.Kind).KI("hex", int64(iv.Hex)).KS("rule", iv.Rule).End()
+		j.Obj().KI("tick", int64(iv.Tick)).KS("kind", iv.Kind).KI("hex", int64(iv.Hex)).KI("from", int64(iv.From)).
+			KI("polity", int64(iv.Polity)).KS("rule", iv.Rule).End()
 	}
 	j.EndArr().End()
 	return j.String()
@@ -65,7 +67,7 @@ func parseSave(v js.Value) (sim.Save, bool) {
 	if err != nil {
 		return sim.Save{}, false
 	}
-	sv := sim.Save{Version: 1, Seed: seed, Config: sim.DefaultConfig(), Tick: int32(num(v, "tick", 0))}
+	sv := sim.Save{Version: 1, Seed: seed, Config: sim.DefaultConfig(), Tick: int32(num(v, "tick", 0)), Scenario: str(v, "scenario")}
 	sv.Config.Threshold = uint32(num(v, "threshold", 0))
 	ivs := v.Get("interventions")
 	if ivs.Type() == js.TypeObject {
@@ -73,6 +75,7 @@ func parseSave(v js.Value) (sim.Save, bool) {
 			x := ivs.Index(i)
 			sv.Interventions = append(sv.Interventions, sim.Intervention{
 				Tick: int32(num(x, "tick", 0)), Kind: str(x, "kind"), Hex: int32(num(x, "hex", -1)), Rule: str(x, "rule"),
+				From: int32(num(x, "from", -1)), Polity: int32(num(x, "polity", -1)),
 			})
 		}
 	}
@@ -112,7 +115,22 @@ func handle(cmd js.Value) string {
 		}
 		cfg := sim.DefaultConfig()
 		cfg.Threshold = uint32(num(cmd, "threshold", 0))
-		cur = sim.New(seed, cfg)
+		var sc *scenario.Scenario
+		if id := str(cmd, "scenario"); id != "" {
+			src := str(cmd, "source")
+			if st, ok := scenario.StarterByID(id); ok && src == "" {
+				src = st.Src
+			}
+			var e error
+			if sc, e = scenario.Read(src); e != nil {
+				return errJSON(e.Error())
+			}
+		}
+		s, e := sim.NewScenario(seed, cfg, sc)
+		if e != nil {
+			return errJSON(e.Error())
+		}
+		cur = s
 		return withWorld(cur, 0)
 	case "step":
 		n := num(cmd, "n", 1)
@@ -123,7 +141,12 @@ func handle(cmd js.Value) string {
 	case "snapshot":
 		return string(render.SnapshotJSON(cur, num(cmd, "since", 0)))
 	case "intervene":
-		iv := sim.Intervention{Kind: "rule", Hex: int32(num(cmd, "hex", -1)), Rule: str(cmd, "rule")}
+		kind := str(cmd, "kind")
+		if kind == "" {
+			kind = "rule"
+		}
+		iv := sim.Intervention{Kind: kind, Hex: int32(num(cmd, "hex", -1)), From: int32(num(cmd, "from", -1)),
+			Polity: int32(num(cmd, "polity", -1)), Rule: str(cmd, "rule")}
 		if err := cur.Intervene(iv); err != nil {
 			return errJSON(err.Error())
 		}
@@ -135,7 +158,11 @@ func handle(cmd js.Value) string {
 		if !ok {
 			return errJSON("bad save")
 		}
-		cur = sim.Replay(sv)
+		s, err := sim.ReplayErr(sv)
+		if err != nil {
+			return errJSON(err.Error())
+		}
+		cur = s
 		return withWorld(cur, 0)
 	case "fork":
 		cur = sim.Replay(cur.Fork(int32(num(cmd, "tick", int(cur.Tick)))))
@@ -163,6 +190,9 @@ func query(q js.Value) string {
 	}
 	if kind == "cells" {
 		return string(render.CellsJSON())
+	}
+	if kind == "scenarios" {
+		return string(render.ScenariosJSON())
 	}
 	if cur == nil {
 		return errJSON("no run")

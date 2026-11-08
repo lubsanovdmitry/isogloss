@@ -3,7 +3,7 @@ WASM_OUT := web/public/isogloss.wasm
 WASM_EXEC := $(shell $(GO) env GOROOT)/lib/wasm/go_js_wasm_exec
 # All engine packages except the root lint test (it shells out to `go list`).
 WASM_PKGS := ./engine/fx/ ./engine/rng/ ./engine/phon/ ./engine/rules/ ./engine/morph/ ./engine/lex/ ./engine/tmpl/ \
-	./engine/world/ ./engine/history/ ./engine/pop/ ./engine/sim/ ./engine/render/
+	./engine/world/ ./engine/history/ ./engine/pop/ ./engine/contact/ ./engine/society/ ./engine/scenario/ ./engine/sim/ ./engine/render/
 
 .PHONY: build test test-wasm wasm web web-dev data golden-update
 

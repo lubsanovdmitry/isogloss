@@ -1,0 +1,28 @@
+name: Steppe riders
+summary: >-
+  Herders from the steppe, few in number, conquer settled farmers who speak an
+  unrelated language.
+watch: >-
+  Whether the farmers shift to the riders' language (elite dominance, leaving a
+  substrate) or the riders shift (elite assimilation, leaving loans for rule
+  and war), and the bilingual zone between.
+ticks: 48
+families:
+  - name: farmers
+    place: fertile
+    radius: 4
+  - name: herders
+    place: steppe|west|east
+    radius: 1
+polities:
+  - capital: family 2
+    covers: 1
+events:
+  - year: 300
+    do: conquer
+    polity: 0
+    place: fertile
+  - year: 400
+    do: conquer
+    polity: 0
+    place: centre

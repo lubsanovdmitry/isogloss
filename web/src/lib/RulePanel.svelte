@@ -1,8 +1,23 @@
 <script lang="ts">
   import type { Engine } from './engine';
 
-  interface Props { engine: Engine; hex: number; onscheduled: (msg: string) => void }
-  let { engine, hex, onscheduled }: Props = $props();
+  interface Props {
+    engine: Engine; hex: number; onscheduled: (msg: string) => void;
+    polity?: { id: number; name: string } | null; // the selected hex's polity
+  }
+  let { engine, hex, onscheduled, polity = null }: Props = $props();
+  let thing = $state('wine');
+  let script = $state('alphabet');
+
+  async function act(kind: string, args: Record<string, unknown>, done: string) {
+    error = '';
+    try {
+      const r = await engine.call<{ tick: number }>('intervene', { kind, ...args });
+      onscheduled(`${done} (generation ${r.tick}).`);
+    } catch (e: any) {
+      error = e.message ?? String(e);
+    }
+  }
 
   let src = $state(`rule my-voicing:
     [stop -voice] => [+voice] / V _ V`);
@@ -61,7 +76,34 @@ C*  (C)        zero or more, optional
 stress:1  tone:rise  phon:breathy   prosody`}</pre>
 </details>
 
+<h3 class="ev">Events</h3>
+<p class="hint">Change who talks to whom. Events act at the start of the next generation and go into the save, so a replay repeats them.</p>
+{#if hex < 0}
+  <p class="hint">Select a hex on the map first.</p>
+{:else}
+  <div class="actions">
+    <button onclick={() => act('plague', { hex }, 'Plague breaks out here')}>Plague here</button>
+    <button onclick={() => act('famine', { hex }, 'Famine strikes here')}>Famine here</button>
+    <label class="inl">Invent <input bind:value={thing} size="8" aria-label="Thing to invent" /></label>
+    <button onclick={() => act('invent', { hex, rule: thing.trim() }, `'${thing.trim()}' will appear here`)}>here</button>
+  </div>
+  {#if polity}
+    <p class="hint">This hex belongs to <strong>{polity.name}</strong>.</p>
+    <div class="actions">
+      <button onclick={() => act('collapse', { polity: polity!.id }, `${polity!.name} will break up`)}>Break it up</button>
+      <select bind:value={script} aria-label="Script type"><option>alphabet</option><option>abjad</option><option>syllabary</option></select>
+      <button onclick={() => act('script', { polity: polity!.id, rule: script }, `${polity!.name} will start writing`)}>Give it writing</button>
+      <button onclick={() => act('standard', { polity: polity!.id }, `${polity!.name} will fix a standard`)}>Fix a standard</button>
+      <button onclick={() => act('seafaring', { polity: polity!.id }, `${polity!.name} will take to the sea`)}>Take to the sea</button>
+    </div>
+  {:else}
+    <p class="hint">This hex belongs to no polity.</p>
+  {/if}
+{/if}
+
 <style>
+  h3.ev { font-family: var(--serif); font-weight: 700; font-size: var(--t-lg); margin: 1.4rem 0 0.2rem; }
+  .inl { display: inline-flex; gap: 0.3rem; align-items: center; font-size: var(--t-sm); color: var(--ink-soft); }
   textarea { width: 100%; font-family: var(--serif); font-size: var(--t-lg); line-height: 1.4; }
   .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0.5rem 0; }
   .hint { color: var(--ink-soft); font-size: var(--t-sm); }

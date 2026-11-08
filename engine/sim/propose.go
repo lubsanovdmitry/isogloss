@@ -22,6 +22,13 @@ const seedLevelPermille = 200
 // simplifying families are favoured by large, connected communities.
 var simplifying = map[string]bool{"merger": true, "cluster": true, "erosion": true, "length": true}
 
+// register records an innovation that is taken community by community
+// rather than spreading as a wave.
+func (s *Sim) register(in *history.Innovation, origin int32) *history.Innovation {
+	in.Origin, in.Tick, in.Life = origin, s.Tick, 0
+	return s.Reg.Add(in)
+}
+
 func (s *Sim) newInnov(r *rng.Stream, in *history.Innovation, origin int32) {
 	in.Origin, in.Tick = origin, s.Tick
 	in.Rate = signedQ16(int32(r.IntN(1000)) - 250) // −0.25 .. 0.75

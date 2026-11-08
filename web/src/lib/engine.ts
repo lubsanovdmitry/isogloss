@@ -8,8 +8,11 @@ export interface Snapshot {
   tick: number; proto: string; innovations: number; live: number;
   comms: [number, number, number, number][]; // hex, population, language, polity (-1 none)
   polities: Polity[]; routes: number[][]; // routes: hex paths
+  families: number; scenario: ScenarioInfo | null;
   langs: Lang[]; tree: TreeNode[]; eventCount: number; events: Event[];
 }
+export interface ScenarioInfo { name: string; summary: string; watch: string; ticks: number; events?: { tick: number; do: string }[] }
+export interface ScenarioEntry extends ScenarioInfo { id: string; families: number }
 export interface Polity { id: number; name: string; capital: number; founded: number; fell: number; seafaring: boolean }
 export interface Step { tick: number; innov: number; label: string; before: string; after: string }
 export interface Etym {
@@ -22,7 +25,7 @@ export interface TableRow {
   loans: [number, 'loan' | 'substrate' | 'learned', string, number][]; // language index, kind, donor, tick
   dbl: [number, string][]; // language index, concept sharing the root
 }
-export interface Table { langs: string[]; rows: TableRow[] }
+export interface Table { protos: number; langs: string[]; rows: TableRow[] }
 export interface Writing {
   polity: string; script: string; since: number; reformed: number; from: string; classical: boolean; gap: number; standard?: number;
   examples: { concept: string; spelling: string; form: string; now: string; gap: number }[];
