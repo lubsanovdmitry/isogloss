@@ -173,6 +173,8 @@ type Sim struct {
 	// conservative: capitals with a written standard, which take up
 	// innovations more slowly.
 	conservative []int32
+	// Annotations: storyteller outputs carried in the save (see Save).
+	Annotations []Annotation
 	// Camp is the steering campaign, nil in the sandbox.
 	Camp *Campaign
 	// FixedRoutes are trade routes set by events; they always run.

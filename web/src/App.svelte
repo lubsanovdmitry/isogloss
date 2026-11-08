@@ -28,7 +28,7 @@
   let showSubs = $state(false);
   let mapMode = $state<'langs' | 'polities'>('langs');
   let concept = $state('water');
-  let tab = $state<'campaign' | 'tree' | 'word' | 'table' | 'intel' | 'lang' | 'fable' | 'rules' | 'log'>('tree');
+  let tab = $state<'campaign' | 'tree' | 'word' | 'table' | 'intel' | 'lang' | 'fable' | 'stories' | 'rules' | 'log'>('tree');
   let cell = $state(-1); // paradigm cell shown in Word history (-1 = dictionary form)
   let cells = $state<Record<string, string[]>>({});
   let running = $state(false);
@@ -195,7 +195,7 @@
 
   const allTabs = [
     ['campaign', 'Campaign'], ['tree', 'Family tree'], ['word', 'Word history'], ['table', 'Word lists'], ['intel', 'Intelligibility'],
-    ['lang', 'Grammar'], ['fable', 'Parallel text'], ['rules', 'Change rules'], ['log', 'Chronicle'],
+    ['lang', 'Grammar'], ['fable', 'Parallel text'], ['stories', 'Stories'], ['rules', 'Change rules'], ['log', 'Chronicle'],
   ] as const;
   const tabs = $derived(allTabs.filter(([id]) => id !== 'campaign' || snap?.campaign));
 </script>
@@ -289,6 +289,10 @@
       {#if snap}
         {#if tab === 'campaign'}
           <CampaignPanel {engine} tick={snap.tick} hex={selected} onscheduled={(m) => (status = m)} oninnov={showInnov} />
+        {:else if tab === 'stories'}
+          {#await import('./lib/StoryPanel.svelte') then { default: StoryPanel }}
+            <StoryPanel {engine} seed={snap.seed} tick={snap.tick} langs={living} />
+          {/await}
         {:else if tab === 'tree'}
           {#if nodes.get(0)}
             <ul class="tree"><TreeItem node={nodes.get(0)!} {nodes} langs={snap.langs} proto={snap.proto}

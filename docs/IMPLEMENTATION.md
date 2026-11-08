@@ -287,3 +287,48 @@ Empire collapse, Island hopping, Steppe riders, Tone delta, Silk road
 target segment occurs; clash detection sorts instead of hashing strings.
 Varieties that differ in history cannot share work, so runs that settle the
 whole map at year 0 cost several times a default run.
+
+## M5 · Campaign and storyteller
+
+**Campaign.** A scenario with a `campaign:` section makes the run a
+steering game. The player's polity is founded at `people`; influence
+accrues each generation (population / 250 + 5, +5 with writing, +5 with a
+standard, scaled by `income`). Player actions are ordinary interventions
+marked `Paid`: they are charged when they take effect and refused (with a
+chronicle note) when the purse is short, so a campaign replays exactly from
+its save. Costs: script 150, standard 200, seafaring 150, route 100,
+encourage 40, suppress 60, expand 30, conquer 120. Encouraging a spreading
+change multiplies its local rate ×2.5 in the player's communities,
+suppressing ×0.15. God-mode actions (forcing sound changes, plagues) are
+refused in a campaign. Goals: `spoken: N` (hexes intelligible with the
+capital), `unity` (the farthest member still understands the capital),
+`tonal` (≥ 10% of the capital's vowels carry tone), `daughters: N` (living
+languages of the people's family), `survive`. Score: speakers / 100 + 50 per
+daughter + 300 per goal met + 200 while the polity stands. The player's
+polity collapses a quarter as often as others.
+
+**Storyteller.** Off by default; lives entirely in `web/` and never
+touches simulation state. The provider interface (`web/src/lib/llm.ts`) has
+one implementation, the Anthropic SDK called from the browser with the
+player's own key (kept in sessionStorage unless they ask to remember it),
+loaded on first use with the Stories tab so runs without it download
+nothing extra. Default model Claude Opus 5.5 at low effort (the tasks are
+short), structured outputs (zod schemas), server-side refusal fallbacks on
+the models that support them. Three jobs (`web/src/lib/story.ts`):
+
+- *Names*: the engine builds 5–8 candidates per language from its own
+  words ('river person', 'good person', its central place name), so every
+  name obeys its phonotactics; the model picks one by index (an index out of
+  range falls back to the first candidate) and adds an English exonym. All
+  unnamed languages go in one request.
+- *Chronicles*: the engine gives an era (250 years) as structured events,
+  counts and the languages and polities at its end; the model writes
+  120–220 words.
+- *Myths*: the model writes an abstract sentence tree from the concept
+  labels, tenses and pronouns the engine lists; the engine validates it
+  (`render.BuildClauses`) and renders it into every language with its own
+  morphology and word order. One retry quotes the engine's complaint.
+
+Outputs are annotations keyed `seed/job/prompt-version`, stored in the run
+(`Sim.Annotations`, carried by saves, excluded from the digest), so a
+replay or a reloaded save never asks again.

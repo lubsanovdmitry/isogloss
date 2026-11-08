@@ -1,6 +1,6 @@
 # What remains
 
-Status as of 2026-11-08: **M0–M4 are done** (gates met; see
+Status as of 2026-11-08: **M0–M5 are done** (gates met; see
 [IMPLEMENTATION.md](IMPLEMENTATION.md)). This list is ordered by when it is
 needed.
 
@@ -66,7 +66,10 @@ needed.
 ## M5 · Campaign and LLM
 
 - [x] Steering campaign: `campaign:` section in scenario files (people, income, start, goals: spoken, unity, tonal, daughters, survive); influence from population, writing and a standard; paid actions (script, standard, seafaring, route, encourage/suppress a change in your land, expand, conquer) charged when they happen and refused when unaffordable; score; Campaign tab; two campaign starters (The river people, Song of the delta).
-- [ ] LLM layer in `web/`: names, chronicles, myths as abstract text trees; annotation cache keyed by (seed, event id, prompt version) stored in the save; phonotactic validation of names.
+- [x] Storyteller in `web/`: names picked from engine-built candidates, era chronicles, myths as abstract text trees rendered by the engine; annotations keyed by (seed, job, prompt version) stored in the save.
+- [ ] The storyteller's live API calls have not been exercised end to end (no key in development); the engine side (candidates, era data, tree validation and rendering, annotations through replay) is tested.
+- [ ] Polity names from the storyteller (`namecands?kind=polity` exists; the UI names only languages).
+- [ ] Campaign balance: costs and income are first guesses; one test plays a few actions.
 
 ## Extension points (after M5)
 

@@ -47,7 +47,7 @@ func innovLabel(s *sim.Sim, id uint32) string { return s.Reg.Get(id).Label() }
 // tree, and events from index sinceEvent on.
 func SnapshotJSON(s *sim.Sim, sinceEvent int) []byte {
 	var j JSON
-	j.Obj().KI("tick", int64(s.Tick)).KS("proto", s.ProtoName()).KI("families", int64(len(s.Protos))).K("scenario").Raw(ScenarioJSON(s)).K("campaign").Raw(CampaignJSON(s, false)).
+	j.Obj().KI("tick", int64(s.Tick)).KS("seed", strconv.FormatUint(s.Seed, 10)).KS("proto", s.ProtoName()).KI("families", int64(len(s.Protos))).K("scenario").Raw(ScenarioJSON(s)).K("campaign").Raw(CampaignJSON(s, false)).
 		KI("innovations", int64(len(s.Reg.All))).KI("live", int64(s.LiveCount()))
 	j.K("comms").Arr()
 	for _, c := range s.Communities() {

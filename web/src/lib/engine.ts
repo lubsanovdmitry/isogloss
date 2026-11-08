@@ -5,7 +5,7 @@ export interface Lang { id: number; name: string; centre: number; size: number; 
 export interface TreeNode { id: number; lang: number; parent: number; children: number[]; shared: number; defining: { id: number; label: string; kind?: string }[]; definingLex: number }
 export interface Event { tick: number; kind: string; hex: number; innov: number; lang: number; text: string }
 export interface Snapshot {
-  tick: number; proto: string; innovations: number; live: number;
+  tick: number; seed: string; proto: string; innovations: number; live: number;
   comms: [number, number, number, number][]; // hex, population, language, polity (-1 none)
   polities: Polity[]; routes: number[][]; // routes: hex paths
   families: number; scenario: ScenarioInfo | null; campaign: CampaignInfo | null;

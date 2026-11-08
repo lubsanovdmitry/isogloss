@@ -6,12 +6,13 @@ isoglosses spread hex to hex as waves; languages, the family tree and every
 word's etymology emerge from that. See the [spec](docs/Isogloss%20—%20Language%20Evolution%20Simulator%20Spec.md),
 the [implementation notes](docs/IMPLEMENTATION.md) and [what remains](docs/TODO.md).
 
-Status: **M4 (society and scenarios)**. Phonology, lexicon, wave spread,
+Status: **M5 (campaign and storyteller)**: all five milestones of the spec. Phonology, lexicon, wave spread,
 clustering, the shared-innovation tree, etymology traces, inflection with the
 grammaticalization cycle, analogy and word order, meaning drift and homophony,
 borrowing with loan strata, substrates and place names, polities, conquest,
-trade routes, writing and standards, several families, scenario files, the
-browser app and the CLI. The campaign and LLM layer (M5) come next.
+trade routes, writing and standards, several families, scenario files, a
+steering campaign, an optional AI storyteller (bring your own Anthropic API
+key), the browser app and the CLI. Extensions are listed in docs/TODO.md.
 
 ## Run it
 

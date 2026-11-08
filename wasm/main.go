@@ -58,6 +58,10 @@ func saveJSON(sv sim.Save) string {
 		j.Obj().KI("tick", int64(iv.Tick)).KS("kind", iv.Kind).KI("hex", int64(iv.Hex)).KI("from", int64(iv.From)).
 			KI("polity", int64(iv.Polity)).KS("rule", iv.Rule).KU("innov", uint64(iv.Innov)).KB("paid", iv.Paid).End()
 	}
+	j.EndArr().K("annotations").Arr()
+	for _, a := range sv.Annotations {
+		j.Obj().KS("key", a.Key).KS("value", a.Value).End()
+	}
 	j.EndArr().End()
 	return j.String()
 }
@@ -80,7 +84,40 @@ func parseSave(v js.Value) (sim.Save, bool) {
 			})
 		}
 	}
+	if as := v.Get("annotations"); as.Type() == js.TypeObject {
+		for i := 0; i < as.Length(); i++ {
+			sv.Annotations = append(sv.Annotations, sim.Annotation{Key: str(as.Index(i), "key"), Value: str(as.Index(i), "value")})
+		}
+	}
 	return sv, true
+}
+
+// npSpec reads a noun phrase of an abstract text from JS.
+func npSpec(v js.Value) *render.NPSpec {
+	if v.Type() != js.TypeObject {
+		return nil
+	}
+	n := &render.NPSpec{Noun: str(v, "noun"), Pron: str(v, "pron"), Adj: str(v, "adj"), PL: v.Get("pl").Truthy(), Def: v.Get("def").Truthy()}
+	n.Gen = npSpec(v.Get("gen"))
+	return n
+}
+
+// clauseSpecs reads an abstract text (a list of clauses) from JS.
+func clauseSpecs(v js.Value) []render.ClauseSpec {
+	var out []render.ClauseSpec
+	if v.Type() != js.TypeObject {
+		return nil
+	}
+	for i := 0; i < v.Length(); i++ {
+		x := v.Index(i)
+		c := render.ClauseSpec{Verb: str(x, "verb"), Tense: str(x, "tense"), English: str(x, "english"),
+			Obj: npSpec(x.Get("obj")), Dat: npSpec(x.Get("dat")), Loc: npSpec(x.Get("loc"))}
+		if s := npSpec(x.Get("subj")); s != nil {
+			c.Subj = *s
+		}
+		out = append(out, c)
+	}
+	return out
 }
 
 // parseSeed accepts the seed as a decimal string (full 64-bit range) or a number.
@@ -154,6 +191,9 @@ func handle(cmd js.Value) string {
 		return `{"ok":true,"tick":` + strconv.Itoa(int(cur.Tick+1)) + `}`
 	case "save":
 		return saveJSON(cur.SaveState())
+	case "annotate":
+		cur.Annotate(str(cmd, "key"), str(cmd, "value"))
+		return `{"ok":true}`
 	case "load":
 		sv, ok := parseSave(cmd.Get("save"))
 		if !ok {
@@ -240,6 +280,30 @@ func query(q js.Value) string {
 		return string(render.IntelJSON(cur))
 	case "frames":
 		return string(render.FramesJSON(cur))
+	case "namecands":
+		id := int32(num(q, "id", -1))
+		if str(q, "kind") == "polity" {
+			return string(render.CandidatesJSON(render.PolityNameCandidates(cur, id)))
+		}
+		return string(render.CandidatesJSON(render.LangNameCandidates(cur, id)))
+	case "era":
+		return string(render.EraJSON(cur, int32(num(q, "from", 0)), int32(num(q, "to", int(cur.Tick)+1))))
+	case "mythspec":
+		return string(render.MythSpecJSON())
+	case "rendertext":
+		cl, err := render.BuildClauses(clauseSpecs(q.Get("clauses")))
+		if err != nil {
+			return errJSON(err.Error())
+		}
+		return string(render.TextJSON(cur, cl))
+	case "annotations":
+		var j render.JSON
+		j.Arr()
+		for _, a := range cur.Annotations {
+			j.Obj().KS("key", a.Key).KS("value", a.Value).End()
+		}
+		j.EndArr()
+		return j.String()
 	case "campaign":
 		return string(render.CampaignJSON(cur, true))
 	case "place":

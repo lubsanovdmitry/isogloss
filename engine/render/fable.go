@@ -272,18 +272,20 @@ func renderClause(v *lex.Variety, c Clause) []Word {
 	return out
 }
 
-// FableJSON renders the fable in the proto-language and every living
+// FableJSON renders the fable in the proto-language(s) and every living
 // language, interlinear.
-func FableJSON(s *sim.Sim) []byte {
+func FableJSON(s *sim.Sim) []byte { return textJSON(s, Fable) }
+
+func textJSON(s *sim.Sim, clauses []Clause) []byte {
 	var j JSON
 	j.Obj().K("english").Arr()
-	for _, c := range Fable {
+	for _, c := range clauses {
 		j.S(c.English)
 	}
 	j.EndArr().K("langs").Arr()
 	emit := func(name string, id int32, v *lex.Variety) {
 		j.Obj().KS("name", name).KI("id", int64(id)).KS("order", v.M.Order.ValueName(morph.Clause)).K("lines").Arr()
-		for _, c := range Fable {
+		for _, c := range clauses {
 			j.Arr()
 			for _, w := range renderClause(v, c) {
 				j.Obj().KS("f", w.Form).KS("g", w.Gloss).End()

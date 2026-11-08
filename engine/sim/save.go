@@ -35,11 +35,33 @@ type Save struct {
 	Tick          int32
 	Scenario      string // scenario source, "" for none
 	Interventions []Intervention
+	// Annotations are storyteller outputs (names, chronicles, myths) keyed
+	// by (seed, event, prompt version). They never affect the simulation;
+	// they live in the save so a replay never asks the storyteller again.
+	Annotations []Annotation
+}
+
+// Annotation is one cached storyteller output (opaque to the engine).
+type Annotation struct {
+	Key   string
+	Value string
+}
+
+// Annotate stores (or replaces) an annotation.
+func (s *Sim) Annotate(key, value string) {
+	for i := range s.Annotations {
+		if s.Annotations[i].Key == key {
+			s.Annotations[i].Value = value
+			return
+		}
+	}
+	s.Annotations = append(s.Annotations, Annotation{key, value})
 }
 
 // SaveState captures the run for replay.
 func (s *Sim) SaveState() Save {
-	sv := Save{Version: 1, Seed: s.Seed, Config: s.Cfg, Tick: s.Tick, Interventions: slices.Clone(s.Interventions)}
+	sv := Save{Version: 1, Seed: s.Seed, Config: s.Cfg, Tick: s.Tick, Interventions: slices.Clone(s.Interventions),
+		Annotations: slices.Clone(s.Annotations)}
 	if s.Scenario != nil {
 		sv.Scenario = s.Scenario.Src
 	}
@@ -74,6 +96,7 @@ func ReplayErr(sv Save) (*Sim, error) {
 		s.Cfg = sv.Config // the save's config already has the overrides
 	}
 	s.Interventions = slices.Clone(sv.Interventions)
+	s.Annotations = slices.Clone(sv.Annotations)
 	for s.Tick < sv.Tick {
 		s.Step()
 	}
