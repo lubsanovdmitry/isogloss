@@ -8,8 +8,17 @@ export interface Snapshot {
   tick: number; proto: string; innovations: number; live: number;
   comms: [number, number, number, number][]; // hex, population, language, polity (-1 none)
   polities: Polity[]; routes: number[][]; // routes: hex paths
-  families: number; scenario: ScenarioInfo | null;
+  families: number; scenario: ScenarioInfo | null; campaign: CampaignInfo | null;
   langs: Lang[]; tree: TreeNode[]; eventCount: number; events: Event[];
+}
+export interface CampaignInfo {
+  polity: number; name: string; alive: boolean; capital: number; influence: number; earned: number; spent: number; score: number;
+  script: boolean; standard: boolean; seafaring: boolean;
+  goals: { kind: string; n: number; value: number; met: boolean; text: string }[];
+}
+export interface CampaignDetail extends CampaignInfo {
+  costs: Record<string, number>; members: number;
+  innovations: { id: number; label: string; kind: string; rule: string; applied: number; steer: number }[];
 }
 export interface ScenarioInfo { name: string; summary: string; watch: string; ticks: number; events?: { tick: number; do: string }[] }
 export interface ScenarioEntry extends ScenarioInfo { id: string; families: number }

@@ -17,7 +17,27 @@ type Scenario struct {
 	Config               []Setting
 	Polities             []Polity
 	Events               []Event
-	Src                  string // the source text, kept for saves
+	Campaign             *Campaign // nil: sandbox
+	Src                  string    // the source text, kept for saves
+}
+
+// Campaign makes the run a steering game: the player guides the people of
+// one polity (founded at People), spending influence on actions, toward
+// goals.
+type Campaign struct {
+	People string // capital place of the player's polity
+	Income int32  // income scale, per mille (default 1000)
+	Start  int32  // influence at the start
+	Goals  []Goal
+}
+
+// Goal is one campaign goal: Kind is spoken (≥ N hexes speak the people's
+// language), unity (the farthest hex of the polity still understands the
+// capital), tonal (the capital's speech has tone), daughters (≥ N living
+// languages of the people's family) or survive (the polity stands).
+type Goal struct {
+	Kind string
+	N    int32
 }
 
 // World constrains map generation.
@@ -69,7 +89,9 @@ type Event struct {
 }
 
 var (
-	topKeys    = []string{"name", "summary", "watch", "seed", "ticks", "world", "proto", "families", "config", "polities", "events"}
+	topKeys    = []string{"name", "summary", "watch", "seed", "ticks", "world", "proto", "families", "config", "polities", "events", "campaign"}
+	campKeys   = []string{"people", "income", "start", "goals"}
+	GoalKinds  = []string{"spoken", "unity", "tonal", "daughters", "survive"}
 	worldKeys  = []string{"width", "height", "land", "shape", "rivers"}
 	protoKeys  = []string{"template", "syllables", "final-glottal"}
 	familyKeys = []string{"name", "place", "radius"}
@@ -276,5 +298,37 @@ func Read(src string) (*Scenario, error) {
 		sc.Events = append(sc.Events, ev)
 	}
 	slices.SortStableFunc(sc.Events, func(a, b Event) int { return int(a.Tick - b.Tick) })
+	if c := root.Get("campaign"); c != nil {
+		if err := checkKeys(c, campKeys, "campaign"); err != nil {
+			return nil, err
+		}
+		inc, err := num(c, "income", 1000)
+		if err != nil {
+			return nil, err
+		}
+		start, err := num(c, "start", 100)
+		if err != nil {
+			return nil, err
+		}
+		camp := &Campaign{People: str(c, "people"), Income: int32(inc), Start: int32(start)}
+		goals, err := list(c, "goals")
+		if err != nil {
+			return nil, err
+		}
+		for _, g := range goals {
+			if g.Kind != Map || len(g.Keys) != 1 || !slices.Contains(GoalKinds, g.Keys[0]) {
+				return nil, &Error{g.Line, "a goal is one of: " + strings.Join(GoalKinds, ", ") + " (e.g. 'spoken: 40')"}
+			}
+			v := g.Vals[0]
+			n := int64(1)
+			if v.Str != "true" && v.Str != "yes" {
+				if n, err = v.Int(); err != nil {
+					return nil, err
+				}
+			}
+			camp.Goals = append(camp.Goals, Goal{g.Keys[0], int32(n)})
+		}
+		sc.Campaign = camp
+	}
 	return sc, nil
 }

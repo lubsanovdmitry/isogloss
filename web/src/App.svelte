@@ -12,6 +12,7 @@
   import FablePanel from './lib/FablePanel.svelte';
   import WaveChart from './lib/WaveChart.svelte';
   import PlaceCard from './lib/PlaceCard.svelte';
+  import CampaignPanel from './lib/CampaignPanel.svelte';
 
   const engine = new Engine();
   const YEARS = 25;
@@ -27,7 +28,7 @@
   let showSubs = $state(false);
   let mapMode = $state<'langs' | 'polities'>('langs');
   let concept = $state('water');
-  let tab = $state<'tree' | 'word' | 'table' | 'intel' | 'lang' | 'fable' | 'rules' | 'log'>('tree');
+  let tab = $state<'campaign' | 'tree' | 'word' | 'table' | 'intel' | 'lang' | 'fable' | 'rules' | 'log'>('tree');
   let cell = $state(-1); // paradigm cell shown in Word history (-1 = dictionary form)
   let cells = $state<Record<string, string[]>>({});
   let running = $state(false);
@@ -87,6 +88,8 @@
       const r = await engine.call<{ world: World; snapshot: Snapshot }>('init', { seed: seed.trim() || '1', scenario: scenarioID });
       world = r.world;
       accept(r.snapshot, true);
+      if (r.snapshot.campaign) tab = 'campaign';
+      else if (tab === 'campaign') tab = 'tree';
       selected = -1;
       overlay = null;
       viewIdx = -1;
@@ -190,10 +193,11 @@
     await newRun();
   });
 
-  const tabs = [
-    ['tree', 'Family tree'], ['word', 'Word history'], ['table', 'Word lists'], ['intel', 'Intelligibility'],
+  const allTabs = [
+    ['campaign', 'Campaign'], ['tree', 'Family tree'], ['word', 'Word history'], ['table', 'Word lists'], ['intel', 'Intelligibility'],
     ['lang', 'Grammar'], ['fable', 'Parallel text'], ['rules', 'Change rules'], ['log', 'Chronicle'],
   ] as const;
+  const tabs = $derived(allTabs.filter(([id]) => id !== 'campaign' || snap?.campaign));
 </script>
 
 <header>
@@ -283,7 +287,9 @@
     </div>
     <div class="panel" role="tabpanel">
       {#if snap}
-        {#if tab === 'tree'}
+        {#if tab === 'campaign'}
+          <CampaignPanel {engine} tick={snap.tick} hex={selected} onscheduled={(m) => (status = m)} oninnov={showInnov} />
+        {:else if tab === 'tree'}
           {#if nodes.get(0)}
             <ul class="tree"><TreeItem node={nodes.get(0)!} {nodes} langs={snap.langs} proto={snap.proto}
               onlang={(id) => { focusLang = id; tab = 'lang'; }} oninnov={showInnov} /></ul>

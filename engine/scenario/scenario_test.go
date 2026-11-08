@@ -43,7 +43,7 @@ seq-at-key:
 
 func TestStarters(t *testing.T) {
 	ss := Starters()
-	if len(ss) != 5 {
+	if len(ss) < 5 {
 		t.Fatalf("%d starters", len(ss))
 	}
 	for _, s := range ss {

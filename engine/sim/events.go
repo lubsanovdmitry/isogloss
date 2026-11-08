@@ -12,12 +12,30 @@ import (
 // forced sound change. Events that no longer make sense (a polity that has
 // fallen, an empty origin) do nothing.
 func (s *Sim) applyEvent(iv Intervention) {
+	if !s.pay(iv) {
+		return
+	}
 	r := rng.New(s.Seed, rng.Key("event"), uint64(s.Tick), uint64(iv.Hex+1), uint64(iv.From+1))
 	var p *society.Polity
 	if iv.Polity >= 0 && int(iv.Polity) < len(s.Polities) && s.Polities[iv.Polity].Alive() {
 		p = s.Polities[iv.Polity]
 	}
 	switch iv.Kind {
+	case "encourage", "suppress":
+		if s.Camp != nil {
+			d, verb := int8(1), "encourages"
+			if iv.Kind == "suppress" {
+				d, verb = -1, "frowns on"
+			}
+			s.Camp.steer[iv.Innov] = d
+			name := "the polity"
+			if p := s.Polities[s.Camp.Polity]; p.Alive() {
+				name = p.Name
+			}
+			s.log(history.Event{Kind: "campaign", Hex: -1, Innov: iv.Innov, Lang: -1, Text: name + " " + verb + " " + s.Reg.Get(iv.Innov).Label()})
+		}
+	case "expand":
+		s.expand(iv)
 	case "collapse":
 		if p != nil {
 			s.fall(p, "it breaks apart")

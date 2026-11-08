@@ -124,6 +124,11 @@ func NewScenario(seed uint64, cfg Config, sc *scenario.Scenario) (*Sim, error) {
 		if err := s.scheduleEvents(sc); err != nil {
 			return nil, err
 		}
+		if sc.Campaign != nil {
+			if err := s.setupCampaign(sc.Campaign); err != nil {
+				return nil, err
+			}
+		}
 	}
 	return s, nil
 }

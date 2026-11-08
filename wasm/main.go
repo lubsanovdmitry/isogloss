@@ -56,7 +56,7 @@ func saveJSON(sv sim.Save) string {
 		KI("tick", int64(sv.Tick)).KI("threshold", int64(sv.Config.Threshold)).KS("scenario", sv.Scenario).K("interventions").Arr()
 	for _, iv := range sv.Interventions {
 		j.Obj().KI("tick", int64(iv.Tick)).KS("kind", iv.Kind).KI("hex", int64(iv.Hex)).KI("from", int64(iv.From)).
-			KI("polity", int64(iv.Polity)).KS("rule", iv.Rule).End()
+			KI("polity", int64(iv.Polity)).KS("rule", iv.Rule).KU("innov", uint64(iv.Innov)).KB("paid", iv.Paid).End()
 	}
 	j.EndArr().End()
 	return j.String()
@@ -76,6 +76,7 @@ func parseSave(v js.Value) (sim.Save, bool) {
 			sv.Interventions = append(sv.Interventions, sim.Intervention{
 				Tick: int32(num(x, "tick", 0)), Kind: str(x, "kind"), Hex: int32(num(x, "hex", -1)), Rule: str(x, "rule"),
 				From: int32(num(x, "from", -1)), Polity: int32(num(x, "polity", -1)),
+				Innov: uint32(num(x, "innov", 0)), Paid: x.Get("paid").Truthy(),
 			})
 		}
 	}
@@ -146,7 +147,7 @@ func handle(cmd js.Value) string {
 			kind = "rule"
 		}
 		iv := sim.Intervention{Kind: kind, Hex: int32(num(cmd, "hex", -1)), From: int32(num(cmd, "from", -1)),
-			Polity: int32(num(cmd, "polity", -1)), Rule: str(cmd, "rule")}
+			Polity: int32(num(cmd, "polity", -1)), Rule: str(cmd, "rule"), Innov: uint32(num(cmd, "innov", 0))}
 		if err := cur.Intervene(iv); err != nil {
 			return errJSON(err.Error())
 		}
@@ -239,6 +240,8 @@ func query(q js.Value) string {
 		return string(render.IntelJSON(cur))
 	case "frames":
 		return string(render.FramesJSON(cur))
+	case "campaign":
+		return string(render.CampaignJSON(cur, true))
 	case "place":
 		return string(render.PlaceJSON(cur, int32(num(q, "hex", -1))))
 	case "save":

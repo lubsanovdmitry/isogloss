@@ -47,7 +47,7 @@ func innovLabel(s *sim.Sim, id uint32) string { return s.Reg.Get(id).Label() }
 // tree, and events from index sinceEvent on.
 func SnapshotJSON(s *sim.Sim, sinceEvent int) []byte {
 	var j JSON
-	j.Obj().KI("tick", int64(s.Tick)).KS("proto", s.ProtoName()).KI("families", int64(len(s.Protos))).K("scenario").Raw(ScenarioJSON(s)).
+	j.Obj().KI("tick", int64(s.Tick)).KS("proto", s.ProtoName()).KI("families", int64(len(s.Protos))).K("scenario").Raw(ScenarioJSON(s)).K("campaign").Raw(CampaignJSON(s, false)).
 		KI("innovations", int64(len(s.Reg.All))).KI("live", int64(s.LiveCount()))
 	j.K("comms").Arr()
 	for _, c := range s.Communities() {
@@ -774,4 +774,50 @@ func ScenarioJSON(s *sim.Sim) []byte {
 	}
 	j.EndArr().End()
 	return j.Bytes()
+}
+
+// CampaignJSON is the steering game's state (null in the sandbox): the
+// player's polity, influence, goals and score; with detail, also action
+// costs and the changes spreading in the player's land.
+func CampaignJSON(s *sim.Sim, detail bool) []byte {
+	var j JSON
+	cp := s.Camp
+	if cp == nil {
+		return j.Null().Bytes()
+	}
+	p := s.Polities[cp.Polity]
+	goals, score := s.CampaignStatus()
+	j.Obj().KI("polity", int64(p.ID)).KS("name", p.Name).KB("alive", p.Alive()).KI("capital", int64(p.Capital)).
+		KI("influence", int64(cp.Influence)).KI("earned", int64(cp.Earned)).KI("spent", int64(cp.Spent)).KI("score", score).
+		KB("script", p.Script != nil).KB("standard", p.Standard != nil).KB("seafaring", p.Seafaring).K("goals").Arr()
+	for _, g := range goals {
+		j.Obj().KS("kind", g.Goal.Kind).KI("n", int64(g.Goal.N)).KI("value", int64(g.Value)).KB("met", g.Met).KS("text", g.Describe).End()
+	}
+	j.EndArr()
+	if detail {
+		j.K("costs").Obj()
+		for _, k := range []string{"script", "standard", "seafaring", "route", "encourage", "suppress", "expand", "conquer"} {
+			j.KI(k, sim.ActionCost[k])
+		}
+		j.End().K("innovations").Arr()
+		ids, applied, steer := s.TerritoryInnovations()
+		for i, id := range ids {
+			in := s.Reg.Get(id)
+			j.Obj().KU("id", uint64(id)).KS("label", in.Label()).KS("kind", in.Kind.String()).KS("rule", in.Src).
+				KI("applied", int64(applied[i])).KI("steer", int64(steer[i])).End()
+		}
+		j.EndArr().KI("members", int64(memberCount(s, p.ID)))
+	}
+	j.End()
+	return j.Bytes()
+}
+
+func memberCount(s *sim.Sim, id int32) int {
+	n := 0
+	for _, c := range s.Communities() {
+		if c.Polity == id {
+			n++
+		}
+	}
+	return n
 }

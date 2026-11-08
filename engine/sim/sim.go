@@ -173,6 +173,8 @@ type Sim struct {
 	// conservative: capitals with a written standard, which take up
 	// innovations more slowly.
 	conservative []int32
+	// Camp is the steering campaign, nil in the sandbox.
+	Camp *Campaign
 	// FixedRoutes are trade routes set by events; they always run.
 	FixedRoutes [][2]int32
 	// normOf: per hex, the polity whose standard (and capital's speech) its
@@ -271,6 +273,7 @@ func (s *Sim) Step() {
 	s.grow()               // 2
 	s.society()
 	s.writing()
+	s.income()
 	s.refreshContacts() // 3
 	s.propose()         // 4
 	s.spread()          // 5, 6, 7 (apply includes repair)
@@ -390,6 +393,7 @@ func (s *Sim) spread() {
 			if slices.Contains(s.conservative, int32(h)) {
 				f /= 2 // the seat of a written standard changes slowly
 			}
+			f = f * s.steering(id, h) / 1000
 			if p := s.normOf[h]; p >= 0 && s.Polities[p].Capital != l.in.Origin {
 				f = f * 20 / 100 // the norm resists innovations from elsewhere
 			}

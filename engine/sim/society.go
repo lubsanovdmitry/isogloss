@@ -341,6 +341,9 @@ func (s *Sim) collapsePolities(r *rng.Stream) {
 		}
 		n := int32(len(s.members(p)))
 		pm := uint32(s.Cfg.CollapseRate) * uint32(4+n/4+(s.Tick-p.Founded)/4) / 1000
+		if s.Camp != nil && s.Camp.Polity == p.ID {
+			pm /= 4 // the player's people hold together better (it is their game)
+		}
 		if s.ByHex[p.Capital] == nil || s.ByHex[p.Capital].Polity != p.ID || r.Permille(min(pm, 300)) {
 			s.fall(p, "it breaks up")
 		}

@@ -1,0 +1,21 @@
+name: The river people
+summary: >-
+  A campaign. You guide one people from their river homeland. Influence
+  grows with your people and their standing; spend it on writing, a
+  standard, steering sound changes in your land, expanding, trading and
+  taking to the sea.
+watch: >-
+  Your score: speakers of your language, daughter languages, survival and
+  the goals met.
+ticks: 40
+families:
+  - place: fertile
+    radius: 1
+campaign:
+  people: fertile
+  start: 100
+  goals:
+    - spoken: 40
+    - unity: true
+    - survive: true
+    - daughters: 3

@@ -23,6 +23,8 @@ type Intervention struct {
 	From   int32  // migrate: origin; route: the other end (-1 none)
 	Polity int32  // collapse, conquer, script, standard, seafaring: polity index
 	Rule   string // rule source; script type; concept label (invent)
+	Innov  uint32 // encourage, suppress: the innovation
+	Paid   bool   // a campaign action: costs influence when it happens
 }
 
 // Save is everything needed to rebuild a run.
@@ -95,6 +97,15 @@ func (s *Sim) Fork(t int32) Save {
 
 // Intervene schedules an intervention for the next tick after validating it.
 func (s *Sim) Intervene(iv Intervention) error {
+	if s.Camp != nil {
+		if _, ok := ActionCost[iv.Kind]; !ok {
+			return errors.New("sim: " + iv.Kind + " is not a campaign action")
+		}
+		iv.Paid = true
+		if iv.Polity < 0 {
+			iv.Polity = s.Camp.Polity
+		}
+	}
 	if err := s.validate(iv); err != nil {
 		return err
 	}
@@ -132,6 +143,14 @@ func (s *Sim) validate(iv Intervention) error {
 	case "conquer":
 		if !land(iv.Hex) || iv.Polity < 0 {
 			return errors.New("sim: conquer needs a polity and a land hex")
+		}
+	case "encourage", "suppress":
+		if iv.Innov == 0 || int(iv.Innov) > len(s.Reg.All) {
+			return errors.New("sim: " + iv.Kind + " needs an innovation")
+		}
+	case "expand":
+		if !land(iv.Hex) {
+			return errors.New("sim: expand needs a land hex")
 		}
 	case "invent":
 		if _, ok := lex.ConceptByLabel(iv.Rule); !ok || !land(iv.Hex) {

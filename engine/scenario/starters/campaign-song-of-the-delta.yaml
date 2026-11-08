@@ -1,0 +1,24 @@
+name: Song of the delta
+summary: >-
+  A challenge campaign. Your people speak short words that often end in a
+  glottal stop. Make their language tonal within a thousand years, and keep
+  it spoken.
+watch: >-
+  Sound changes that drop final glottal stops (tonogenesis): encourage them
+  where they start and suppress what competes.
+ticks: 40
+world:
+  rivers: 18
+proto:
+  template: CV(C)
+  syllables: 1
+  final-glottal: 450
+families:
+  - place: coast
+    radius: 1
+campaign:
+  people: coast
+  start: 150
+  goals:
+    - tonal: true
+    - spoken: 25

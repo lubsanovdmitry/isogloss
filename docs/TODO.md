@@ -65,7 +65,7 @@ needed.
 
 ## M5 · Campaign and LLM
 
-- [ ] Steering campaign: influence, goals, score.
+- [x] Steering campaign: `campaign:` section in scenario files (people, income, start, goals: spoken, unity, tonal, daughters, survive); influence from population, writing and a standard; paid actions (script, standard, seafaring, route, encourage/suppress a change in your land, expand, conquer) charged when they happen and refused when unaffordable; score; Campaign tab; two campaign starters (The river people, Song of the delta).
 - [ ] LLM layer in `web/`: names, chronicles, myths as abstract text trees; annotation cache keyed by (seed, event id, prompt version) stored in the save; phonotactic validation of names.
 
 ## Extension points (after M5)
