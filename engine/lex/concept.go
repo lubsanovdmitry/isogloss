@@ -34,6 +34,7 @@ type Concept struct {
 	Freq        uint8  // 1 (most frequent) .. 5
 	Stab        uint8  // 1 (very stable) .. 5
 	Taboo       bool
+	FieldID     uint8 // dense index of Field
 }
 
 // Core reports whether the concept is on the Swadesh-207 list.
@@ -56,6 +57,7 @@ var (
 func loadConcepts() {
 	byLabel = map[string]ConceptID{}
 	byCID = map[int]ConceptID{}
+	fields := map[string]uint8{}
 	for _, f := range data.Lines(data.Concepts) {
 		cid, _ := strconv.Atoi(f[0])
 		freq, _ := strconv.Atoi(f[6])
@@ -72,6 +74,12 @@ func loadConcepts() {
 		case "culture":
 			c.Role = RoleCulture
 		}
+		fid, ok := fields[c.Field]
+		if !ok {
+			fid = uint8(len(fields))
+			fields[c.Field] = fid
+		}
+		c.FieldID = fid
 		byLabel[c.Label] = c.ID
 		byCID[cid] = c.ID
 		concepts = append(concepts, c)

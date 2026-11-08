@@ -3,12 +3,15 @@
 package sim
 
 import (
+	"slices"
+
 	"isogloss/engine/contact"
 	"isogloss/engine/fx"
 	"isogloss/engine/history"
 	"isogloss/engine/lex"
 	"isogloss/engine/pop"
 	"isogloss/engine/rng"
+	"isogloss/engine/society"
 	"isogloss/engine/world"
 )
 
@@ -51,6 +54,13 @@ type Config struct {
 	// for sound and grammatical changes. Words never cross by the wave:
 	// they are borrowed.
 	CrossLang uint32
+	// Society turns on polities, conquest, disasters, migration, trade
+	// routes and seafaring. PolityRate: per-mille chance per tick that a
+	// large community founds a polity; ConquestRate: per-mille chance per
+	// tick that a polity tries to expand; CollapseRate scales the chance
+	// that it breaks up (1000 = default).
+	Society                                bool
+	PolityRate, ConquestRate, CollapseRate uint32
 }
 
 // DefaultConfig returns the standard configuration.
@@ -58,7 +68,7 @@ func DefaultConfig() Config {
 	return Config{
 		World:          world.DefaultConfig,
 		SoundRate:      60,
-		LexRate:        700,
+		LexRate:        560,
 		Candidates:     4,
 		ClusterEvery:   4,
 		SmallBias:      500,
@@ -73,6 +83,10 @@ func DefaultConfig() Config {
 		Substrates:     4,
 		SubstrateRate:  100,
 		CrossLang:      500,
+		Society:        true,
+		PolityRate:     15,
+		ConquestRate:   400,
+		CollapseRate:   1000,
 	}
 }
 
@@ -138,19 +152,30 @@ type Sim struct {
 	invented []bool
 	subRoots map[[2]int32]lex.EtymID
 	lang     []int32 // per hex, for the language barrier in spread
+
+	// Society: polities ever founded (by ID), current trade routes, hubs,
+	// route edges and the far ends of each hub's routes.
+	Polities   []*society.Polity
+	Routes     []society.Route
+	hub        map[int32]bool
+	routeEdge  map[[2]int32]bool
+	routeLinks map[int32][]int32
 }
 
 // New creates a run at tick 0: map, proto-language and homeland.
 func New(seed uint64, cfg Config) *Sim {
 	s := &Sim{
 		Seed: seed, Cfg: cfg,
-		World:    world.Generate(seed, cfg.World),
-		Proto:    lex.GenerateProto(rng.New(seed, rng.Key("proto"))),
-		Reg:      &history.Registry{},
-		vars:     map[uint64]*lex.Variety{},
-		cl:       pop.NewClusterer(),
-		nextRoot: lex.FirstCoinedRoot,
-		subRoots: map[[2]int32]lex.EtymID{},
+		World:      world.Generate(seed, cfg.World),
+		Proto:      lex.GenerateProto(rng.New(seed, rng.Key("proto"))),
+		Reg:        &history.Registry{},
+		vars:       map[uint64]*lex.Variety{},
+		cl:         pop.NewClusterer(),
+		nextRoot:   lex.FirstCoinedRoot,
+		subRoots:   map[[2]int32]lex.EtymID{},
+		hub:        map[int32]bool{},
+		routeEdge:  map[[2]int32]bool{},
+		routeLinks: map[int32][]int32{},
 	}
 	if cfg.Threshold > 0 {
 		s.cl.Thr = fx.FromPermille(cfg.Threshold)
@@ -194,9 +219,12 @@ func (s *Sim) homeland() int32 {
 }
 
 func (s *Sim) settle(h, people int32, v *lex.Variety, from *pop.Community) {
-	c := &pop.Community{Hex: h, Pop: people, Variety: v, Lang: -1, Founded: s.Tick}
+	c := &pop.Community{Hex: h, Pop: people, Variety: v, Lang: -1, Founded: s.Tick, Polity: -1}
 	if from != nil {
 		c.Lang = from.Lang
+		if p := s.polityOf(from); p != nil && s.World.Distance(p.Capital, h) <= maxReach {
+			c.Polity, c.Joined = p.ID, s.Tick // colonists stay subjects
+		}
 		c.Diffusing = append([]pop.Diffusion(nil), from.Diffusing...)
 		for _, l := range s.live {
 			l.wave.Level[h] = l.wave.Level[from.Hex]
@@ -237,6 +265,7 @@ func (s *Sim) intern(v *lex.Variety) *lex.Variety {
 
 func (s *Sim) refreshContacts() {
 	s.contacts = pop.ContactWeights(s.World, s.present)
+	s.adjustContacts()
 	var maxPop int32
 	for _, c := range s.ByHex {
 		if c != nil && c.Pop > maxPop {
@@ -245,7 +274,7 @@ func (s *Sim) refreshContacts() {
 	}
 	for h, c := range s.ByHex {
 		if c != nil {
-			s.prestige[h] = pop.Prestige(c.Pop, maxPop)
+			s.prestige[h] = fx.Q16(int64(pop.Prestige(c.Pop, maxPop)) * s.prestigeFactor(c) / 1000)
 		} else {
 			s.prestige[h] = 0
 		}
@@ -257,9 +286,10 @@ func (s *Sim) Step() {
 	s.Tick++
 	s.applyInterventions() // 1
 	s.grow()               // 2
-	s.refreshContacts()    // 3
-	s.propose()            // 4
-	s.spread()             // 5, 6, 7 (apply includes repair)
+	s.society()
+	s.refreshContacts() // 3
+	s.propose()         // 4
+	s.spread()          // 5, 6, 7 (apply includes repair)
 	s.diffuse()
 	if s.Tick%4 == 0 {
 		s.sweepMemo()
@@ -297,7 +327,11 @@ func (s *Sim) grow() {
 			continue
 		}
 		best, bestCost := int32(-1), int32(1<<30)
-		for _, nb := range s.World.Hexes[c.Hex].Nbr {
+		nbrs := s.World.Hexes[c.Hex].Nbr[:]
+		if s.seafarer(c) {
+			nbrs = append(slices.Clip(nbrs), society.SeaReach(s.World, c.Hex, 2)...)
+		}
+		for _, nb := range nbrs {
 			if nb < 0 || s.ByHex[nb] != nil || claimed[nb] {
 				continue
 			}

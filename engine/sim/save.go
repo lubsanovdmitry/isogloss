@@ -131,7 +131,7 @@ func (s *Sim) Digest() uint64 {
 	for _, c := range s.Communities() {
 		mix(uint64(c.Hex))
 		mix(uint64(c.Pop))
-		mix(uint64(uint32(c.Lang)))
+		mix(uint64(uint32(c.Lang)) | uint64(uint32(c.Polity))<<32)
 		mix(c.Variety.Key)
 		for i := 0; i < c.Variety.Lex.Len(); i++ {
 			l := c.Variety.Lex.At(lex.ConceptID(i))
@@ -160,6 +160,9 @@ func (s *Sim) Digest() uint64 {
 		for _, b := range []byte(l.Name) {
 			mix(uint64(b))
 		}
+	}
+	for _, p := range s.Polities {
+		mix(uint64(p.Capital) | uint64(uint32(p.Fell))<<32)
 	}
 	mix(uint64(len(s.Reg.All)))
 	return h

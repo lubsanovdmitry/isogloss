@@ -24,7 +24,9 @@ func WorldJSON(s *sim.Sim) []byte {
 	}
 	j.EndArr().K("substrates").Arr()
 	for _, sb := range s.Subs {
-		j.Obj().KS("name", sb.Name).KI("seed", int64(sb.Seed)).End()
+		if sb.Seed >= 0 {
+			j.Obj().KS("name", sb.Name).KI("seed", int64(sb.Seed)).End()
+		}
 	}
 	j.EndArr().End()
 	return j.Bytes()
@@ -46,7 +48,21 @@ func SnapshotJSON(s *sim.Sim, sinceEvent int) []byte {
 		KI("innovations", int64(len(s.Reg.All))).KI("live", int64(s.LiveCount()))
 	j.K("comms").Arr()
 	for _, c := range s.Communities() {
-		j.Arr().I(int64(c.Hex)).I(int64(c.Pop)).I(int64(c.Lang)).EndArr()
+		j.Arr().I(int64(c.Hex)).I(int64(c.Pop)).I(int64(c.Lang)).I(int64(c.Polity)).EndArr()
+	}
+	j.EndArr()
+	j.K("polities").Arr()
+	for _, p := range s.Polities {
+		j.Obj().KI("id", int64(p.ID)).KS("name", p.Name).KI("capital", int64(p.Capital)).KI("founded", int64(p.Founded)).
+			KI("fell", int64(p.Fell)).KB("seafaring", p.Seafaring).End()
+	}
+	j.EndArr().K("routes").Arr()
+	for _, rt := range s.Routes {
+		j.Arr()
+		for _, h := range rt.Path {
+			j.I(int64(h))
+		}
+		j.EndArr()
 	}
 	j.EndArr()
 	j.K("langs").Arr()
@@ -639,6 +655,13 @@ func PlaceJSON(s *sim.Sim, hex int32) []byte {
 			KS("adopted", phon.RenderWord(c.Name))
 		if c.Lang >= 0 {
 			j.KS("lang", s.Langs[c.Lang].Name)
+		}
+		if c.Polity >= 0 && s.Polities[c.Polity].Alive() {
+			p := s.Polities[c.Polity]
+			j.KS("polity", p.Name).KB("capital", p.Capital == hex)
+			if c.Outcome != 0 {
+				j.KS("rule", c.Outcome.String())
+			}
 		}
 		j.K("steps").Arr()
 		for _, st := range steps {

@@ -4,6 +4,7 @@ import (
 	"isogloss/engine/fx"
 	"isogloss/engine/lex"
 	"isogloss/engine/phon"
+	"isogloss/engine/society"
 	"isogloss/engine/world"
 )
 
@@ -20,6 +21,11 @@ type Community struct {
 	// from history entry NameAt on reshape it (history.Evolve).
 	Name   phon.Word
 	NameAt int32
+	// Society: the polity the community belongs to (-1 none), when it
+	// joined, and for foreign rule what came of it.
+	Polity  int32
+	Joined  int32
+	Outcome society.Outcome
 }
 
 // Diffusion tracks one diffusible change in one community.

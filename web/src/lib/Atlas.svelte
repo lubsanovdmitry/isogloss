@@ -9,9 +9,12 @@
     isogloss: Set<number> | null; // hexes that adopted the chosen innovation
     level?: number[] | null; // live wave level per hex (per-mille), if still spreading
     substrates?: boolean; // outline the areas of the languages spoken before the family
+    polityOf?: Int32Array | null; // per hex; shown instead of languages when set
+    capitals?: number[];
+    routes?: number[][];
     onselect: (hex: number) => void;
   }
-  let { world, langOf, selected, isogloss, level = null, substrates = false, onselect }: Props = $props();
+  let { world, langOf, selected, isogloss, level = null, substrates = false, polityOf = null, capitals = [], routes = [], onselect }: Props = $props();
 
   const R = 14; // hex radius
   const W = Math.sqrt(3) * R;
@@ -62,7 +65,16 @@
     return d;
   }
 
-  const borders = $derived(edgePath((a, b) => langOf[a] >= 0 && langOf[b] >= 0 && langOf[a] !== langOf[b]));
+  const borders = $derived(
+    polityOf
+      ? edgePath((a, b) => (polityOf![a] >= 0 || polityOf![b] >= 0) && polityOf![a] !== polityOf![b] && langOf[a] >= 0 && langOf[b] >= 0)
+      : edgePath((a, b) => langOf[a] >= 0 && langOf[b] >= 0 && langOf[a] !== langOf[b]),
+  );
+  const routePath = $derived(
+    routes
+      .map((p) => p.map((h, i) => `${i ? 'L' : 'M'}${cx(world.hexes[h].col, world.hexes[h].row).toFixed(1)},${cy(world.hexes[h].row).toFixed(1)}`).join(''))
+      .join(''),
+  );
   const coast = $derived(edgePath((a, b) => (world.hexes[a].biome === 'sea') !== (world.hexes[b].biome === 'sea')));
   const isoPath = $derived(
     isogloss ? edgePath((a, b) => langOf[a] >= 0 && langOf[b] >= 0 && isogloss!.has(a) !== isogloss!.has(b)) : '',
@@ -83,6 +95,7 @@
   function fill(id: number) {
     const h = world.hexes[id];
     if (h.biome === 'sea') return 'var(--sea)';
+    if (polityOf && langOf[id] >= 0) return polityOf[id] >= 0 ? langColor(polityOf[id] + 3) : 'color-mix(in srgb, var(--ink) 14%, var(--paper))';
     if (langOf[id] >= 0) return langColor(langOf[id]);
     return biomeColor(h.biome);
   }
@@ -133,6 +146,11 @@
   <path d={rivers} class="river" />
   <path d={coast} class="coast" />
   <path d={borders} class="border" />
+  {#if routePath}<path d={routePath} class="route" />{/if}
+  {#each capitals as h (h)}
+    {@const hx = world.hexes[h]}
+    <circle cx={cx(hx.col, hx.row)} cy={cy(hx.row)} r="3.6" class="capital" />
+  {/each}
   {#if isoPath}<path d={isoPath} class="iso" />{/if}
   {#if subPath}
     <path d={subPath} class="subarea" />
@@ -147,6 +165,8 @@
 </svg>
 
 <style>
+  .route { fill: none; stroke: var(--ink); stroke-width: 1.4; stroke-dasharray: 1 3; stroke-linecap: round; opacity: 0.7; pointer-events: none; }
+  .capital { fill: var(--paper); stroke: var(--ink); stroke-width: 1.6; pointer-events: none; }
   .subarea { fill: none; stroke: var(--ink); stroke-width: 1.6; stroke-dasharray: 4 3; opacity: 0.75; pointer-events: none; }
   .sublabel { font-family: var(--serif); font-style: italic; font-size: 13px; text-anchor: middle; dominant-baseline: middle; fill: var(--ink);
     paint-order: stroke; stroke: var(--paper); stroke-width: 3px; pointer-events: none; }

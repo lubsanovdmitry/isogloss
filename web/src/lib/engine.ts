@@ -6,9 +6,11 @@ export interface TreeNode { id: number; lang: number; parent: number; children: 
 export interface Event { tick: number; kind: string; hex: number; innov: number; lang: number; text: string }
 export interface Snapshot {
   tick: number; proto: string; innovations: number; live: number;
-  comms: [number, number, number][]; // hex, population, language
+  comms: [number, number, number, number][]; // hex, population, language, polity (-1 none)
+  polities: Polity[]; routes: number[][]; // routes: hex paths
   langs: Lang[]; tree: TreeNode[]; eventCount: number; events: Event[];
 }
+export interface Polity { id: number; name: string; capital: number; founded: number; fell: number; seafaring: boolean }
 export interface Step { tick: number; innov: number; label: string; before: string; after: string }
 export interface Etym {
   concept: string; gloss: string; lang: string; hex: number; proto: string; protoLang: string; form: string; root: string; steps: Step[]; text: string;
@@ -24,6 +26,7 @@ export interface Stratum { kind: 'loan' | 'substrate'; donor: string; count: num
 export interface Place {
   original: string; originalName: string; gloss: string; namedBy: string; substrate: boolean;
   form?: string; name?: string; since?: number; adopted?: string; lang?: string; steps?: Step[];
+  polity?: string; capital?: boolean; rule?: string;
 }
 export interface Exponent { slot: string; name: string; pos: string; stage: string; kind: string; since: number; source?: string; sourceForm?: string; marker?: string }
 export interface Sketch {

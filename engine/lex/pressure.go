@@ -28,12 +28,14 @@ func (v *Variety) Pressure() *Pressure {
 		return v.press
 	}
 	p := &Pressure{}
-	type key struct {
-		h     uint64
-		field string
-	}
-	first := map[key]ConceptID{}
 	cs := Concepts()
+	// Words sorted by (form, field): homophones in one field are adjacent.
+	type entry struct {
+		h     uint64
+		field uint8
+		c     ConceptID
+	}
+	es := make([]entry, 0, v.Lex.Len())
 	for i := 0; i < v.Lex.Len(); i++ {
 		c := ConceptID(i)
 		l := v.Lex.At(c)
@@ -44,17 +46,37 @@ func (v *Variety) Pressure() *Pressure {
 		if s, ok := l.AlsoSense(); ok {
 			p.Drifts = append(p.Drifts, Drift{c, s})
 		}
-		k := key{l.Hash, cs[i].Field}
-		o, seen := first[k]
-		if !seen {
-			first[k] = c
+		es = append(es, entry{l.Hash, cs[i].FieldID, c})
+	}
+	slices.SortFunc(es, func(a, b entry) int {
+		switch {
+		case a.h != b.h:
+			if a.h < b.h {
+				return -1
+			}
+			return 1
+		case a.field != b.field:
+			return int(a.field) - int(b.field)
+		}
+		return int(a.c) - int(b.c)
+	})
+	for k := 1; k < len(es); k++ {
+		a, b := es[k-1], es[k]
+		if a.h != b.h || a.field != b.field {
 			continue
 		}
-		if v.Lex.At(o).Etym == l.Etym {
+		// Compare with the group's first word, as each pair is listed once.
+		j := k - 1
+		for j > 0 && es[j-1].h == b.h && es[j-1].field == b.field {
+			j--
+		}
+		o, c := es[j].c, b.c
+		lo, lc := v.Lex.At(o), v.Lex.At(c)
+		if lo.Etym == lc.Etym {
 			continue // one word with two senses, not a clash
 		}
 		loser, winner := c, o
-		if lo, lc := v.Lex.At(o).Freq, l.Freq; lo > lc || lo == lc && cs[o].Stab > cs[i].Stab {
+		if lo.Freq > lc.Freq || lo.Freq == lc.Freq && cs[o].Stab > cs[c].Stab {
 			loser, winner = o, c
 		}
 		p.Clashes = append(p.Clashes, Clash{loser, winner})

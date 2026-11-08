@@ -23,6 +23,7 @@
   let seed = $state('42');
   let selected = $state(-1);
   let showSubs = $state(false);
+  let mapMode = $state<'langs' | 'polities'>('langs');
   let concept = $state('water');
   let tab = $state<'tree' | 'word' | 'table' | 'intel' | 'lang' | 'fable' | 'rules' | 'log'>('tree');
   let cell = $state(-1); // paradigm cell shown in Word history (-1 = dictionary form)
@@ -45,6 +46,13 @@
     else if (snap) for (const [h, , l] of snap.comms) a[h] = l;
     return a;
   });
+  const polityOf = $derived.by(() => {
+    if (mapMode !== 'polities' || !snap || !world || viewing) return null;
+    const a = new Int32Array(world.hexes.length).fill(-1);
+    for (const [h, , , p] of snap.comms) a[h] = p;
+    return a;
+  });
+  const capitals = $derived(snap && !viewing ? snap.polities.filter((p) => p.fell < 0).map((p) => p.capital) : []);
   const isoSet = $derived(overlay && !viewing ? new Set(overlay.applied) : null);
   const nodes = $derived(new Map<number, TreeNode>((snap?.tree ?? []).map((n) => [n.id, n])));
   const living = $derived(snap ? snap.langs.filter((l) => l.died < 0) : []);
@@ -204,9 +212,14 @@
 <main>
   <section class="atlas" aria-label="Map">
     {#if world}
-      <Atlas {world} {langOf} {selected} isogloss={isoSet} level={!viewing ? overlay?.level : null} substrates={showSubs} onselect={select} />
+      <Atlas {world} {langOf} {selected} isogloss={isoSet} level={!viewing ? overlay?.level : null} substrates={showSubs} {polityOf} {capitals} routes={viewing ? [] : (snap?.routes ?? [])} onselect={select} />
       <div class="under">
         {#if selected >= 0}<PlaceCard {engine} hex={selected} tick={snap?.tick ?? 0} />{/if}
+        <div class="seg mapmode" role="group" aria-label="Map colours">
+          <button aria-pressed={mapMode === 'langs'} onclick={() => (mapMode = 'langs')}>Languages</button>
+          <button aria-pressed={mapMode === 'polities'} onclick={() => (mapMode = 'polities')}>Polities</button>
+        </div>
+        <span class="maplegend">○ capital · ┈ trade route{mapMode === 'polities' ? ' · grey: no polity' : ''}</span>
         {#if world.substrates?.length}
           <label class="subs"><input type="checkbox" bind:checked={showSubs} /> Show the languages spoken here before ({world.substrates.map((x) => x.name).join(', ')})</label>
         {/if}
@@ -321,6 +334,12 @@
   .rule { margin: 0; color: var(--isogloss); flex-basis: 100%; }
   .chartrow { flex-basis: 100%; }
   .under :global(.place) { flex-basis: 100%; }
+  .mapmode { display: inline-flex; }
+  .mapmode button { border-radius: 0; }
+  .mapmode button:first-child { border-radius: 3px 0 0 3px; }
+  .mapmode button:last-child { border-radius: 0 3px 3px 0; margin-left: -1px; }
+  .mapmode button[aria-pressed='true'] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .maplegend { font-size: var(--t-xs); color: var(--ink-soft); }
   .subs { flex-basis: 100%; font-size: var(--t-sm); color: var(--ink-soft); display: flex; gap: 0.35rem; align-items: center; }
   .wavenote { margin: 0; color: var(--ink-soft); flex-basis: 100%; font-size: var(--t-xs); }
   .scrub input { width: 12rem; max-width: 50vw; }

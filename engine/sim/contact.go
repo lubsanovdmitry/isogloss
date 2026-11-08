@@ -1,6 +1,8 @@
 package sim
 
 import (
+	"slices"
+
 	"isogloss/engine/contact"
 	"isogloss/engine/fx"
 	"isogloss/engine/history"
@@ -9,6 +11,7 @@ import (
 	"isogloss/engine/phon"
 	"isogloss/engine/pop"
 	"isogloss/engine/rng"
+	"isogloss/engine/society"
 	"isogloss/engine/tmpl"
 )
 
@@ -157,13 +160,15 @@ func (s *Sim) proposeContact(r *rng.Stream, c *pop.Community) {
 			s.newInnov(r, &history.Innovation{Kind: history.Semantic, Sem: sc, Stress: -1}, c.Hex)
 		}
 	}
-	// Gaps: take over a neighbour's word for a thing it knows.
+	// Gaps: take over a neighbour's word for a thing it knows (trade
+	// routes reach far).
+	trade := s.tradeContacts(c)
 	for _, g := range press.Gaps {
 		if !s.invented[g] || !r.Permille(gapPermille) {
 			continue
 		}
 		best, bestW := int32(-1), int64(-1)
-		for _, k := range s.contacts[c.Hex] {
+		for _, k := range append(slices.Clip(s.contacts[c.Hex]), trade...) {
 			if o := s.ByHex[k.To]; o != nil && !o.Variety.Lex.At(g).Absent() {
 				if w := int64(k.W) * int64(s.prestige[k.To]); w > bestW {
 					best, bestW = k.To, w
@@ -177,9 +182,19 @@ func (s *Sim) proposeContact(r *rng.Stream, c *pop.Community) {
 		}
 		break // one gap at a time
 	}
-	// Prestige borrowing across language boundaries.
-	for _, k := range s.foreign(c) {
+	// Prestige borrowing across language boundaries (and along trade
+	// routes); bilingual communities borrow three times as much.
+	foreign := s.foreign(c)
+	for _, k := range trade {
+		if o := s.ByHex[k.To]; o.Lang != c.Lang && o.Lang >= 0 {
+			foreign = append(foreign, k)
+		}
+	}
+	for _, k := range foreign {
 		pm := uint64(loanPermille) * uint64(s.Cfg.LoanRate) / 1000
+		if c.Outcome == society.Bilingual || s.ByHex[k.To].Outcome == society.Bilingual {
+			pm *= 3
+		}
 		pm = pm * uint64(k.W) / uint64(fx.FromPermille(450))
 		if s.prestige[k.To] <= s.prestige[c.Hex] {
 			pm = pm * 3 / 10
@@ -283,12 +298,16 @@ func (s *Sim) takeWord(r *rng.Stream, c, d *pop.Community, con lex.ConceptID, ga
 // animals and landscape, a merger of a contrast their language lacked, or
 // their word order.
 func (s *Sim) substratePackage(c *pop.Community) {
-	k := s.Region[c.Hex]
-	if k < 0 {
-		return
+	if k := s.Region[c.Hex]; k >= 0 {
+		s.leaveSubstrate(c, k, s.Cfg.SubstrateRate)
 	}
+}
+
+// leaveSubstrate: with chance pm‰, substrate k leaves its package in
+// community c, whose speakers have just shifted away from it.
+func (s *Sim) leaveSubstrate(c *pop.Community, k int32, pm uint32) {
 	r := rng.New(s.Seed, rng.Key("substrate-shift"), uint64(s.Tick), uint64(c.Hex))
-	if !r.Permille(s.Cfg.SubstrateRate) {
+	if !r.Permille(pm) {
 		return
 	}
 	sb := s.Subs[k]
@@ -309,8 +328,12 @@ func (s *Sim) substratePackage(c *pop.Community) {
 		w[i] = 0
 		con := lex.ConceptID(i)
 		src := sb.V.Lex.At(con).Form
+		etym := sb.V.Lex.At(con).Etym // a sister language given up: its words keep their roots
+		if sb.Seed >= 0 {
+			etym = s.substrateRoot(k, con, c.Hex)
+		}
 		lc := &history.LexChange{Concept: con, Form: contact.Nativize(src, v, false), Freq: v.Lex.At(con).Freq,
-			Etym: s.substrateRoot(k, con, c.Hex), From: -1, Source: src,
+			Etym: etym, From: -1, Source: src,
 			Stratum: lex.Stratum{Kind: lex.Substrate, Donor: k, Tick: s.Tick},
 			How:     "from the " + sb.Name + " substrate " + phon.RenderWord(src)}
 		s.newInnov(r, &history.Innovation{Kind: history.Loan, Lex: lc, Stress: -1}, c.Hex)
@@ -327,7 +350,9 @@ func (s *Sim) substratePackage(c *pop.Community) {
 				Template: "substrate"}, c.Hex)
 		}
 	}
-	s.log(history.Event{Kind: "shift", Hex: c.Hex, Lang: c.Lang, Text: "the " + sb.Name + " speakers here shift to the newcomers' language"})
+	if sb.Seed >= 0 {
+		s.log(history.Event{Kind: "shift", Hex: c.Hex, Lang: c.Lang, Text: "the " + sb.Name + " speakers here shift to the newcomers' language"})
+	}
 }
 
 // substrateRoot is the root of substrate k's word for con (one root per
