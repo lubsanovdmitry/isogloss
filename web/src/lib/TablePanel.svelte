@@ -37,7 +37,7 @@
   function cellTitle(r: TableRow, i: number): string {
     const parts: string[] = [];
     const l = loanOf(r, i);
-    if (l) parts.push(l[1] === 'loan' ? `borrowed from ${l[2]} in year ${year(l[3])}` : `from the ${l[2]} substrate, year ${year(l[3])}`);
+    if (l) parts.push(l[1] === 'loan' ? `borrowed from ${l[2]} in year ${year(l[3])}` : l[1] === 'learned' ? `learned loan from ${l[2]} in year ${year(l[3])}` : `from the ${l[2]} substrate, year ${year(l[3])}`);
     const d = dblOf(r, i);
     if (d) parts.push(`doublet: the same root also gives the word for ‘${d}’`);
     return parts.join('; ');
@@ -56,7 +56,7 @@
     <label class="chk"><input type="checkbox" bind:checked={onlyLoans} /> only loans and doublets</label>
     <span class="note">
       Shaded cells use a new root; the same shade in a row marks cognates.
-      <span class="mk loan">L</span> loan from another language, <span class="mk sub">S</span> substrate word,
+      <span class="mk loan">L</span> loan from another language, <span class="mk sub">S</span> substrate word, <span class="mk loan">B</span> bookish loan from a classical language,
       <span class="mk dbl">D</span> doublet (the root came in twice). Hover a mark for its source.
     </span>
   {:else}
@@ -104,7 +104,7 @@
                 <td class="none" title="no word: the thing is not known here">—</td>
               {:else}
                 <td class="ipa" style:background={cogTint(r.cog[i])} title={cellTitle(r, i) || undefined}>
-                  {i === 0 ? '*' : ''}{f}{#if l}<sup class="mk {l[1] === 'loan' ? 'loan' : 'sub'}">{l[1] === 'loan' ? 'L' : 'S'}</sup>{/if}{#if d}<sup class="mk dbl">D</sup>{/if}
+                  {i === 0 ? '*' : ''}{f}{#if l}<sup class="mk {l[1] === 'substrate' ? 'sub' : 'loan'}">{l[1] === 'loan' ? 'L' : l[1] === 'learned' ? 'B' : 'S'}</sup>{/if}{#if d}<sup class="mk dbl">D</sup>{/if}
                 </td>
               {/if}
             {/each}

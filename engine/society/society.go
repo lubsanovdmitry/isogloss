@@ -7,6 +7,8 @@ package society
 import (
 	"slices"
 
+	"isogloss/engine/lex"
+
 	"isogloss/engine/world"
 )
 
@@ -19,6 +21,14 @@ type Polity struct {
 	Fell      int32 // tick it broke up, -1 while it stands
 	Lang      int32 // language of the capital when founded
 	Seafaring bool
+
+	// Writing: the script (nil until adopted), the standard (the capital's
+	// variety when it was fixed, nil before), and whether that standard has
+	// become a classical language nobody speaks (diglossia).
+	Script       *Orthography
+	Standard     *lex.Variety
+	StandardTick int32
+	Classical    bool
 }
 
 // Alive reports whether the polity still stands.

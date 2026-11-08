@@ -100,6 +100,10 @@ func (s *Sim) DonorName(st lex.Stratum) string {
 		if st.Donor >= 0 && int(st.Donor) < len(s.Subs) {
 			return s.Subs[st.Donor].Name
 		}
+	case lex.Learned:
+		if st.Donor >= 0 && int(st.Donor) < len(s.Polities) {
+			return "Classical " + s.Polities[st.Donor].Name
+		}
 	}
 	return ""
 }

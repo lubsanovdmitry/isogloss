@@ -61,6 +61,7 @@
         </li>
       {/each}
     </ol>
+    {#if etym.spelling}<p class="root">Written <span class="spell">⟨{etym.spelling}⟩</span> in the {etym.script}{etym.gap > 0 ? `: spelling and sound have drifted ${Math.round(etym.gap / 10)}% apart` : ', as it sounds'}.</p>{/if}
     {#if etym.loan}<p class="loan">{etym.loan[0].toUpperCase() + etym.loan.slice(1)}: it has gone through only the changes since.</p>{/if}
     <p class="root">Root: {etym.root}</p>
     {#if etym.senses?.length}
@@ -111,6 +112,7 @@
   .origin .what { font-style: italic; }
   .root { color: var(--ink-soft); font-size: var(--t-sm); }
   .hint { color: var(--ink-soft); }
+  .spell { font-family: var(--serif); font-style: italic; }
   .loan { color: var(--isogloss); font-size: var(--t-sm); margin-bottom: 0; }
   .link { background: none; border: none; padding: 0; cursor: pointer; font: inherit; color: inherit; text-decoration: underline dotted; }
 </style>

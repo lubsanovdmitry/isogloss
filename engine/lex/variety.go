@@ -23,6 +23,7 @@ const (
 	Inherited StratumKind = iota // native: inherited or coined
 	Borrowed                     // a loan from another language of the world
 	Substrate                    // a loan from a language its speakers replaced
+	Learned                      // a bookish loan from a written classical language
 )
 
 // Stratum records where a lexeme came from. A loan only undergoes the
@@ -30,7 +31,7 @@ const (
 // of different correspondences.
 type Stratum struct {
 	Kind  StratumKind
-	Donor int32 // Borrowed: donor language ID; Substrate: substrate index; else -1
+	Donor int32 // Borrowed: donor language ID; Substrate: substrate index; Learned: polity ID; else -1
 	Tick  int32 // when it was borrowed
 }
 

@@ -9,7 +9,9 @@ import (
 	"isogloss/engine/lex"
 	"isogloss/engine/morph"
 	"isogloss/engine/phon"
+	"isogloss/engine/pop"
 	"isogloss/engine/sim"
+	"isogloss/engine/society"
 	"isogloss/engine/tmpl"
 )
 
@@ -133,6 +135,9 @@ type Etym struct {
 	Senses   []string
 	Also     string // an emerging extra sense
 	Doublets []Doublet
+	Spelling string // in the script of the community's polity, "" if unwritten
+	Gap      int    // spelling vs pronunciation, per mille
+	Script   string
 }
 
 // Doublet is another word of the same variety from the same root.
@@ -157,6 +162,30 @@ func RootDesc(s *sim.Sim, id lex.EtymID) string {
 	return ""
 }
 
+// stratumKind names a loan stratum for JSON.
+func stratumKind(st lex.Stratum) string {
+	switch st.Kind {
+	case lex.Substrate:
+		return "substrate"
+	case lex.Learned:
+		return "learned"
+	}
+	return "loan"
+}
+
+// writtenBy returns the polity whose script writes the community's
+// language: its own polity, if its capital speaks the same language.
+func writtenBy(s *sim.Sim, c *pop.Community) *society.Polity {
+	if c == nil || c.Polity < 0 {
+		return nil
+	}
+	p := s.Polities[c.Polity]
+	if !p.Alive() || p.Script == nil || s.ByHex[p.Capital].Lang != c.Lang {
+		return nil
+	}
+	return p
+}
+
 // StratumDesc describes how a loan entered: "borrowed from Zhich at t23".
 func StratumDesc(s *sim.Sim, st lex.Stratum) string {
 	switch st.Kind {
@@ -164,6 +193,8 @@ func StratumDesc(s *sim.Sim, st lex.Stratum) string {
 		return "borrowed from " + s.DonorName(st) + " at t" + strconv.Itoa(int(st.Tick))
 	case lex.Substrate:
 		return "from the " + s.DonorName(st) + " substrate, at t" + strconv.Itoa(int(st.Tick))
+	case lex.Learned:
+		return "learned loan from " + s.DonorName(st) + " at t" + strconv.Itoa(int(st.Tick))
 	}
 	return ""
 }
@@ -199,6 +230,9 @@ func EtymOf(s *sim.Sim, hex int32, c lex.ConceptID) (*Etym, bool) {
 	}
 	if a, ok := final.AlsoSense(); ok {
 		e.Also = lex.Concepts()[a].Label
+	}
+	if p := writtenBy(s, com); p != nil && !final.Absent() {
+		e.Spelling, e.Gap, e.Script = p.Script.SpellingOf(c, &final), p.Script.Gap(c, &final), p.Script.Type.String()+" of "+p.Name
 	}
 	for _, x := range v.Doublets(c) {
 		l := v.Lex.At(x)
@@ -243,7 +277,7 @@ func (e *Etym) JSON() []byte {
 	var j JSON
 	j.Obj().KS("concept", e.Concept.Label).KS("gloss", e.Concept.Gloss).KS("lang", e.Lang).
 		KI("hex", int64(e.Hex)).KS("proto", e.Proto).KS("protoLang", e.ProtoLng).KS("form", e.Form).
-		KS("root", e.Root).KS("loan", e.Loan).KS("also", e.Also).KS("text", e.Text()).K("senses").Arr()
+		KS("root", e.Root).KS("loan", e.Loan).KS("also", e.Also).KS("spelling", e.Spelling).KI("gap", int64(e.Gap)).KS("script", e.Script).KS("text", e.Text()).K("senses").Arr()
 	for _, x := range e.Senses {
 		j.S(x)
 	}
@@ -342,11 +376,7 @@ func (t Table) JSON(s *sim.Sim) []byte {
 		j.EndArr().K("loans").Arr()
 		for i, st := range r.Strata {
 			if st.Loan() {
-				kind := "loan"
-				if st.Kind == lex.Substrate {
-					kind = "substrate"
-				}
-				j.Arr().I(int64(i)).S(kind).S(s.DonorName(st)).I(int64(st.Tick)).EndArr()
+				j.Arr().I(int64(i)).S(stratumKind(st)).S(s.DonorName(st)).I(int64(st.Tick)).EndArr()
 			}
 		}
 		j.EndArr().K("dbl").Arr()
@@ -419,6 +449,7 @@ func LangJSON(s *sim.Sim, id int32) []byte {
 	}
 	j.KI("replacements", int64(lexCount))
 	stratumJSON(&j, s, v)
+	writingJSON(&j, s, s.ByHex[l.Centre])
 	j.End()
 	return j.Bytes()
 }
@@ -463,11 +494,7 @@ func stratumJSON(j *JSON, s *sim.Sim, v *lex.Variety) {
 	slices.SortStableFunc(layers, func(a, b *layer) int { return b.n - a.n })
 	j.KI("native", int64(native)).KI("unknown", int64(absent)).K("strata").Arr()
 	for _, ly := range layers {
-		kind := "loan"
-		if ly.st.Kind == lex.Substrate {
-			kind = "substrate"
-		}
-		j.Obj().KS("kind", kind).KS("donor", s.DonorName(ly.st)).KI("count", int64(ly.n)).
+		j.Obj().KS("kind", stratumKind(ly.st)).KS("donor", s.DonorName(ly.st)).KI("count", int64(ly.n)).
 			KI("first", int64(ly.first)).KI("last", int64(ly.last)).K("examples").Arr()
 		for _, e := range ly.ex {
 			j.S(e)
@@ -672,4 +699,39 @@ func PlaceJSON(s *sim.Sim, hex int32) []byte {
 	}
 	j.End()
 	return j.Bytes()
+}
+
+// writingJSON describes how a language is written, if it is: the script,
+// the standard and diglossia, the mean spelling gap and the words whose
+// spelling has drifted furthest from their sound.
+func writingJSON(j *JSON, s *sim.Sim, c *pop.Community) {
+	p := writtenBy(s, c)
+	if p == nil {
+		return
+	}
+	o := p.Script
+	capV := s.ByHex[p.Capital].Variety
+	j.K("writing").Obj().KS("polity", p.Name).KS("script", o.Type.String()).KI("since", int64(o.Since)).
+		KI("reformed", int64(o.Reformed)).KS("from", o.From).KB("classical", p.Classical).KI("gap", int64(o.MeanGap(capV)))
+	if p.Standard != nil {
+		j.KI("standard", int64(p.StandardTick))
+	}
+	type ex struct {
+		c   lex.ConceptID
+		gap int
+	}
+	var xs []ex
+	for _, con := range lex.Concepts() {
+		l := capV.Lex.At(con.ID)
+		if con.Core() && !l.Absent() {
+			xs = append(xs, ex{con.ID, o.Gap(con.ID, l)})
+		}
+	}
+	slices.SortStableFunc(xs, func(a, b ex) int { return b.gap - a.gap })
+	j.K("examples").Arr()
+	for _, x := range xs[:min(8, len(xs))] {
+		j.Obj().KS("concept", lex.Concepts()[x.c].Label).KS("spelling", o.SpellingOf(x.c, capV.Lex.At(x.c))).
+			KS("form", phon.RenderWord(capV.Lex.At(x.c).Form)).KS("now", o.Write(capV.Lex.At(x.c).Form)).KI("gap", int64(x.gap)).End()
+	}
+	j.EndArr().End()
 }

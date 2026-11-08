@@ -62,3 +62,29 @@ func TestPath(t *testing.T) {
 		t.Fatalf("no path from %d to %d across the sea: %v", a, b, p)
 	}
 }
+
+// Writing appears in some runs: invented rarely, then borrowed by
+// neighbours; spelling drifts from sound once fixed.
+func TestWritingSpreads(t *testing.T) {
+	scripts, borrowed, drift := 0, 0, 0
+	for seed := uint64(1); seed <= 4; seed++ {
+		s := New(seed, DefaultConfig())
+		s.Run(40)
+		for _, p := range s.Polities {
+			if p.Script == nil {
+				continue
+			}
+			scripts++
+			if p.Script.From != "" {
+				borrowed++
+			}
+			if p.Script.MeanGap(s.ByHex[p.Capital].Variety) > 0 {
+				drift++
+			}
+		}
+	}
+	t.Logf("scripts %d (borrowed %d), with spelling drift %d", scripts, borrowed, drift)
+	if scripts < 2 || borrowed == 0 || drift == 0 {
+		t.Errorf("writing: %d scripts, %d borrowed, %d drifted", scripts, borrowed, drift)
+	}
+}

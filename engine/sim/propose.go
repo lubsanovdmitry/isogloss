@@ -86,6 +86,7 @@ func (s *Sim) propose() {
 			}
 		}
 		s.proposeContact(r, c)
+		s.proposeStandard(r, c)
 	}
 }
 

@@ -15,14 +15,19 @@ export interface Step { tick: number; innov: number; label: string; before: stri
 export interface Etym {
   concept: string; gloss: string; lang: string; hex: number; proto: string; protoLang: string; form: string; root: string; steps: Step[]; text: string;
   loan: string; also: string; senses: string[]; doublets: { concept: string; form: string; loan: boolean }[];
+  spelling: string; gap: number; script: string;
 }
 export interface TableRow {
   concept: string; id: number; forms: string[]; cog: number[];
-  loans: [number, 'loan' | 'substrate', string, number][]; // language index, kind, donor, tick
+  loans: [number, 'loan' | 'substrate' | 'learned', string, number][]; // language index, kind, donor, tick
   dbl: [number, string][]; // language index, concept sharing the root
 }
 export interface Table { langs: string[]; rows: TableRow[] }
-export interface Stratum { kind: 'loan' | 'substrate'; donor: string; count: number; first: number; last: number; examples: string[] }
+export interface Writing {
+  polity: string; script: string; since: number; reformed: number; from: string; classical: boolean; gap: number; standard?: number;
+  examples: { concept: string; spelling: string; form: string; now: string; gap: number }[];
+}
+export interface Stratum { kind: 'loan' | 'substrate' | 'learned'; donor: string; count: number; first: number; last: number; examples: string[] }
 export interface Place {
   original: string; originalName: string; gloss: string; namedBy: string; substrate: boolean;
   form?: string; name?: string; since?: number; adopted?: string; lang?: string; steps?: Step[];
@@ -32,7 +37,7 @@ export interface Exponent { slot: string; name: string; pos: string; stage: stri
 export interface Sketch {
   lang: Lang; vowels: string[]; consonants: string[]; template: string; stress: string; repair: string;
   changes: { tick: number; innov?: number; label: string; rule?: string; kind?: string }[]; replacements: number;
-  native: number; unknown: number; strata: Stratum[];
+  native: number; unknown: number; strata: Stratum[]; writing?: Writing;
   exponents: Exponent[]; typology: { synthesis: number; fusion: number; irregularity: number; type: string };
   order: { param: string; value: string }[]; examples: string[];
 }

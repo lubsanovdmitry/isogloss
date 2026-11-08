@@ -146,6 +146,28 @@
     </section>
   {/if}
 
+  {#if sk.writing}
+    {@const w = sk.writing}
+    <section>
+      <h3>Writing</h3>
+      <p class="note">
+        Written in the {w.script} of {w.polity} since year {w.since * 25}{w.from ? `, taken from ${w.from}` : ', invented there'}{w.reformed !== w.since ? `; spelling reformed in year ${w.reformed * 25}` : ''}.
+        {#if w.standard !== undefined}{w.classical ? `Its standard, fixed in year ${w.standard * 25}, is now a classical language nobody speaks: bookish words still come from it.` : `A standard was fixed in year ${w.standard * 25}; dialects level toward the capital's speech.`}{/if}
+        On average spelling and sound have drifted {Math.round(w.gap / 10)}% apart.
+      </p>
+      {#if w.examples.length && w.examples[0].gap > 0}
+        <table class="spell">
+          <thead><tr><th scope="col">word</th><th scope="col">spelled</th><th scope="col">sounds</th><th scope="col">would be spelled now</th></tr></thead>
+          <tbody>
+            {#each w.examples.filter((x) => x.gap > 0) as x (x.concept)}
+              <tr><th scope="row">{x.concept}</th><td class="sp">⟨{x.spelling}⟩</td><td class="ipa">{x.form}</td><td class="sp">⟨{x.now}⟩</td></tr>
+            {/each}
+          </tbody>
+        </table>
+      {/if}
+    </section>
+  {/if}
+
   {#if para?.lexemes}
     <section>
       <h3>Paradigms</h3>
@@ -232,6 +254,11 @@
   .para thead th { font-size: var(--t-sm); color: var(--ink-soft); font-weight: 500; }
   .para td.irr button { color: var(--isogloss); font-weight: 600; }
   .mark { color: var(--isogloss); font-size: 0.6em; vertical-align: super; margin-left: 0.15rem; }
+  table.spell { border-collapse: collapse; font-size: var(--t-sm); margin-top: 0.3rem; }
+  table.spell th, table.spell td { padding: 0.15rem 0.9rem 0.15rem 0; text-align: left; border-bottom: 1px solid var(--rule-faint); }
+  table.spell thead th { color: var(--ink-soft); font-weight: 500; }
+  table.spell tbody th { font-weight: 500; }
+  .sp { font-family: var(--serif); font-style: italic; }
   .strata { list-style: none; padding: 0; margin: 0.3rem 0 0; font-size: var(--t-sm); }
   .strata li { display: grid; grid-template-columns: 2.2rem 1fr; gap: 0.5rem; padding: 0.12rem 0; }
   .strata .n { font-family: var(--serif); font-size: var(--t-lg); font-variant-numeric: tabular-nums; text-align: right; line-height: 1.1; }

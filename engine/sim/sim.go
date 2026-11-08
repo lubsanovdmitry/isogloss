@@ -61,6 +61,9 @@ type Config struct {
 	// that it breaks up (1000 = default).
 	Society                                bool
 	PolityRate, ConquestRate, CollapseRate uint32
+	// ScriptRate: per-mille chance per tick that a large polity with no
+	// writing neighbour invents a script.
+	ScriptRate uint32
 }
 
 // DefaultConfig returns the standard configuration.
@@ -87,6 +90,7 @@ func DefaultConfig() Config {
 		PolityRate:     15,
 		ConquestRate:   400,
 		CollapseRate:   1000,
+		ScriptRate:     10,
 	}
 }
 
@@ -160,6 +164,9 @@ type Sim struct {
 	hub        map[int32]bool
 	routeEdge  map[[2]int32]bool
 	routeLinks map[int32][]int32
+	// conservative: capitals with a written standard, which take up
+	// innovations more slowly.
+	conservative []int32
 }
 
 // New creates a run at tick 0: map, proto-language and homeland.
@@ -287,6 +294,7 @@ func (s *Sim) Step() {
 	s.applyInterventions() // 1
 	s.grow()               // 2
 	s.society()
+	s.writing()
 	s.refreshContacts() // 3
 	s.propose()         // 4
 	s.spread()          // 5, 6, 7 (apply includes repair)
@@ -399,6 +407,9 @@ func (s *Sim) spread() {
 				return fade
 			}
 			f := int64(300 + hashIH(id, h)%1400) // per-mille local receptiveness
+			if slices.Contains(s.conservative, int32(h)) {
+				f /= 2 // the seat of a written standard changes slowly
+			}
 			return int32(int64(l.in.Rate) * f / 1000)
 		}
 		for _, h := range l.wave.Step(s.present, s.contacts, s.prestige, s.lang, barrier, rate, spreading) {
