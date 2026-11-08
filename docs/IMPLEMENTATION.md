@@ -13,6 +13,8 @@ Decisions made while building M0–M2 that refine or depart from the spec.
 | M2: irregular paradigms emerge | `TestIrregularParadigmsEmerge`: 8 of 8 seeds have stem allomorphy in a frequent (class ≤ 2) lexeme after 1000 years, and frequent paradigms are more often irregular than rare ones |
 | M2: 1000 years in the browser | 3.7–4.0 s in headless Chromium (seed 42; the machine was loaded), under the 5 s gate; ~1.6 s native on one core |
 | M3: loan strata and doublets in the comparative table | `TestLoanStrataAndDoublets` (seeds 1–12): every run's table has substrate words; of the 8 runs that split into languages by year 800, all 8 show loans from at least three donors and 7 show a loan doublet (a root present both natively and as a loan) |
+| M4: Empire collapse produces a continuum | `TestEmpireCollapseContinuum` (seeds 7–9): under the empire 72–100% of communities understand the capital's speech; 800 years after it falls in year 1000, 22–30% do, and the family forms a continuum of 7–10 languages |
+| M4: 1000 years in the browser | ~3.7 s for the default run (seed 42); scenario runs that settle the whole map at year 0 are slower (Empire collapse ~14 s per 1000 years) |
 | M3: 1000 years in the browser | ~3.3 s in headless Chromium (seed 42); ~1.5 s native on one core (M2's 1.8 s on the same machine) |
 
 ## Departures from the spec
@@ -206,3 +208,82 @@ an emerging sense and doublets; the Grammar tab lists vocabulary layers; the
 map shows a hex's place name with its etymology and can outline the
 substrate areas; `isogloss grammar` lists loans; the CLDF export has a `Loan`
 column and leaves out concepts a language has no word for.
+
+## M4 · Society and scenarios
+
+Society never changes words directly: it changes contact weights, prestige
+and who shifts language (`engine/society` for state, `sim/society.go`,
+`sim/writing.go` for the tick logic, which runs after population growth).
+
+**Polities.** A community of 900+ people at least three hexes from any
+capital may found a polity (15‰ per generation), taking in unaffiliated
+same-language neighbours. Each generation a polity may take one
+neighbouring hex within seven of its capital: union with speakers of its
+language, conquest of other-language land or war with another polity, by
+strength (total population). Polities fall more easily as they grow and
+age. Capitals carry ×1.5 prestige, members ×1.1, trade hubs ×1.25; a
+shared polity strengthens contact ×1.5.
+
+**Foreign rule** applies only to communities that spoke another language
+than the capital's when they joined (dialects that drift apart inside a
+polity are not foreigners). After four generations the outcome is decided
+by the ratio of rulers' to locals' population **within three hexes**:
+≥ 600‰ elite dominance (the locals shift, 15% per generation, and their
+language becomes a substrate that may leave words, a merger and word
+order), < 250‰ elite assimilation (superstrate loans for rule, war, law,
+religion), in between bilingualism (contact ×1.5, borrowing ×3), which long
+rule turns into dominance. A polity-wide ratio gave only dominance: by the
+time herders conquer, their colonists outnumber everyone.
+
+**Disasters, migration, routes, sea.** Famine (5‰ per community, double on
+harsh land), plague (25‰ per generation somewhere populous, hitting three
+hexes around). A full community with no empty neighbour may send a quarter
+of its people to the nearest empty land within six hexes (Dijkstra; across
+the sea for seafarers). Every eight generations the eight largest
+communities at least four hexes apart become hubs linked to their two
+nearest hubs along the cheapest path: route edges double contact, and hubs
+borrow along routes (Wanderwörter). A polity with a coastal capital may take
+to the sea: its coastal communities link to land up to two sea hexes away
+and colonise islands. A group crossing the sea loses its rarest sound (a
+founder effect that does not spread).
+
+**Writing.** A polity of six or more hexes with no writing neighbour may
+invent a script (10‰); one within ten hexes of a writing polity borrows its
+script (8%; an abjad becomes an alphabet 30% of the time). The orthography
+maps every phoneme to its romanized name when adopted; spellings then stay
+fixed while words change, new words are spelled as they sound when they
+arrive, and a mean gap above 300‰ invites reform. Syllabaries write one
+sign per onset+vowel and drop codas. A polity that writes may fix a
+standard: its capital takes up innovations at half the rate, communities
+level words to the capital's, and once the capital no longer understands
+the standard it becomes classical and lends learned loans (stratum
+`Learned`) until the vernacular is written instead.
+
+**Why standards unify.** Stronger contact alone made an empire diverge
+*more* (more innovations travel, none reaches everywhere: a wave lives
+5–15 generations). What holds a standard language together is top-down
+spread: once the capital adopts an innovation, every community following
+the standard moves 30% of the way toward it each generation, wherever it
+is, and innovations from elsewhere take hold at a fifth of the rate. This
+continues under diglossia (the capital's speech keeps its prestige).
+
+**Families.** Each family has its own proto-language; roots are
+namespaced (`lex.FamilyRoot`), so unrelated words never look cognate, and
+each variety records its family so traces replay from the right proto.
+
+**Scenarios.** `engine/scenario` reads a YAML subset (block mappings and
+sequences, scalars, folded text, comments) without reflection and rejects
+unknown keys. A scenario sets world shape (continent, archipelago,
+corridor), land and rivers; proto constraints (template, syllables, share of
+final glottal stops); families and their homelands (named places such as
+`fertile`, `steppe|west`, or hex numbers; radius or `all`); config
+overrides; starting polities (script, standard, seafaring); and events. The
+events become interventions in the save (which also stores the scenario
+source), so scenario runs replay exactly. Five starters are embedded:
+Empire collapse, Island hopping, Steppe riders, Tone delta, Silk road
+(`TestStartersShowWhatTheyPromise` checks what each says to watch).
+
+**Performance.** `Rule.MayApply` skips words in which no clause's first
+target segment occurs; clash detection sorts instead of hashing strings.
+Varieties that differ in history cannot share work, so runs that settle the
+whole map at year 0 cost several times a default run.

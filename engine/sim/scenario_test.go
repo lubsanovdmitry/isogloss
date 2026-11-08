@@ -59,9 +59,7 @@ func understood(s *Sim, h int32) int {
 // continuum: a chain of languages whose neighbours understand each other
 // but whose ends do not.
 func TestEmpireCollapseContinuum(t *testing.T) {
-	if testing.Short() {
-		t.Skip("slow")
-	}
+	heavy(t)
 	sc := starter(t, "empire-collapse")
 	for _, seed := range []uint64{7, 8, 9} {
 		s, err := NewScenario(seed, DefaultConfig(), sc)
@@ -107,9 +105,7 @@ func TestStartersRun(t *testing.T) {
 
 // Each starter shows what it says to watch.
 func TestStartersShowWhatTheyPromise(t *testing.T) {
-	if testing.Short() {
-		t.Skip("slow")
-	}
+	heavy(t)
 	t.Run("steppe riders: every outcome of foreign rule", func(t *testing.T) {
 		sc := starter(t, "steppe-riders")
 		s, _ := NewScenario(7, DefaultConfig(), sc)

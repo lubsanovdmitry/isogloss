@@ -32,9 +32,7 @@ func describeGrammar(t *testing.T, s *Sim, v *lex.Variety) {
 // produce paradigms with stem allomorphy in frequent lexemes, made by sound
 // change across morpheme boundaries and not authored.
 func TestIrregularParadigmsEmerge(t *testing.T) {
-	if testing.Short() {
-		t.Skip("slow")
-	}
+	heavy(t)
 	hits := 0
 	const n = 8
 	var irr, tot [6]int // by frequency class

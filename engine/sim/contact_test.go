@@ -14,9 +14,7 @@ import (
 // time to borrow from sisters, so the doublet check covers runs that split
 // by year 800 (tick 32); families stay one language for 700 years or more.
 func TestLoanStrataAndDoublets(t *testing.T) {
-	if testing.Short() {
-		t.Skip("slow")
-	}
+	heavy(t)
 	const n = 12
 	stats := runSeeds(1, n, 40)
 	split, withDbl, withLayers := 0, 0, 0

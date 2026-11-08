@@ -275,6 +275,7 @@ func (s *Sim) Step() {
 	s.propose()         // 4
 	s.spread()          // 5, 6, 7 (apply includes repair)
 	s.diffuse()
+	s.pruneVarieties()
 	if s.Tick%4 == 0 {
 		s.sweepMemo()
 	}
@@ -506,4 +507,32 @@ func (s *Sim) Wave(id uint32) *pop.Wave {
 		}
 	}
 	return nil
+}
+
+// pruneVarieties keeps in the intern table only varieties some community
+// speaks now (and the proto-languages): every adoption makes a new
+// variety, and the intermediate ones would otherwise pile up.
+func (s *Sim) pruneVarieties() {
+	n := len(s.Protos)
+	for _, c := range s.ByHex {
+		if c != nil {
+			n++
+		}
+	}
+	if len(s.vars) <= 2*n {
+		return
+	}
+	keep := make(map[uint64]*lex.Variety, n)
+	for _, p := range s.Protos {
+		keep[p.Variety.Key] = p.Variety
+	}
+	for _, c := range s.ByHex {
+		if c != nil {
+			keep[c.Variety.Key] = s.vars[c.Variety.Key]
+			if keep[c.Variety.Key] == nil {
+				keep[c.Variety.Key] = c.Variety
+			}
+		}
+	}
+	s.vars = keep
 }

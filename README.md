@@ -6,12 +6,12 @@ isoglosses spread hex to hex as waves; languages, the family tree and every
 word's etymology emerge from that. See the [spec](docs/Isogloss%20—%20Language%20Evolution%20Simulator%20Spec.md),
 the [implementation notes](docs/IMPLEMENTATION.md) and [what remains](docs/TODO.md).
 
-Status: **M3 (meaning and contact)**. Phonology, lexicon, wave spread,
+Status: **M4 (society and scenarios)**. Phonology, lexicon, wave spread,
 clustering, the shared-innovation tree, etymology traces, inflection with the
 grammaticalization cycle, analogy and word order, meaning drift and homophony,
-borrowing with loan strata, substrates and place names, the browser app and
-the CLI. Society and scenarios (M4) and the campaign and LLM layer (M5) come
-next.
+borrowing with loan strata, substrates and place names, polities, conquest,
+trade routes, writing and standards, several families, scenario files, the
+browser app and the CLI. The campaign and LLM layer (M5) come next.
 
 ## Run it
 
@@ -22,6 +22,7 @@ make test                      # engine tests, sound-law fixtures, golden digest
 make build                     # bin/isogloss
 
 bin/isogloss run --seed 42 --ticks 40 --out run.json   # 1000 years; prints the tree
+bin/isogloss run --scenario empire-collapse            # a starter scenario (or a YAML file)
 bin/isogloss etym run.json water                       # trace 'water' in every language
 bin/isogloss etym run.json say --form PST.3SG          # trace an inflected form
 bin/isogloss grammar run.json                          # Markdown grammar sketches
@@ -42,6 +43,7 @@ make web                       # production build in web/dist
 | `engine/rules` | The sound-change rule language: parser and applier |
 | `engine/tmpl` | ~70 sound-change templates instantiated per language |
 | `engine/morph` | Grammatical slots and stages, paradigm cells, word-order parameters (WALS priors) |
+| `engine/society`, `scenario` | Polities, routes, writing; scenario files and the five starters |
 | `engine/contact` | Nativizing loans, borrowability, substrate languages, place names |
 | `engine/lex`, `world`, `pop`, `history`, `sim` | Lexicon and paradigms, map, wave spread and clustering, innovations and traces, tick loop |
 | `engine/render` | JSON, etymologies, comparative tables, correspondences, grammar sketches, parallel text, CLDF |

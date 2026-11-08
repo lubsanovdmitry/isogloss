@@ -17,9 +17,15 @@ const relaxShare = 80
 // Applier applies innovations to varieties, memoising per-word rule results
 // (neighbouring varieties share most of their forms).
 type Applier struct {
-	Reg  *Registry
-	memo map[uint32]map[memoKey]*memoVal // per innovation
+	Reg     *Registry
+	memo    map[uint32]map[memoKey]*memoVal // per innovation
+	entries int                             // memoised results held, across innovations
 }
+
+// maxMemo bounds the memo: when more results than this are held, every
+// innovation's memo is emptied (it is only a cache). Runs with many
+// innovations live at once otherwise reserve gigabytes between sweeps.
+const maxMemo = 250_000
 
 type memoKey struct {
 	form uint64
@@ -52,8 +58,9 @@ func (a *Applier) Track(id uint32) {
 // Retain keeps memoised results only for the given innovations; others
 // still in use are re-tracked.
 func (a *Applier) Retain(keep map[uint32]bool) {
-	for id := range a.memo { //lint:ordered deleting entries is order-independent
+	for id, m := range a.memo { //lint:ordered deleting entries is order-independent
 		if !keep[id] {
+			a.entries -= len(m)
 			delete(a.memo, id)
 		}
 	}
@@ -66,7 +73,24 @@ func (a *Applier) Retain(keep map[uint32]bool) {
 
 // Forget drops memoised results for an innovation that no longer spreads.
 func (a *Applier) Forget(id uint32) {
+	a.entries -= len(a.memo[id])
 	delete(a.memo, id)
+}
+
+// remember stores a memoised result, emptying the memo first if it is full.
+func (a *Applier) remember(memo map[memoKey]*memoVal, k memoKey, mv *memoVal, tracked bool) {
+	if !tracked {
+		memo[k] = mv
+		return
+	}
+	if a.entries >= maxMemo {
+		for id := range a.memo { //lint:ordered clearing every map is order-independent
+			clear(a.memo[id])
+		}
+		a.entries = 0
+	}
+	memo[k] = mv
+	a.entries++
 }
 
 func tmplHash(t phon.Template, sc bool) uint64 {
@@ -292,7 +316,8 @@ func (a *Applier) applySound(v, nv *lex.Variety, in *Innovation, e lex.Entry) {
 	var changed []changedWord
 	violators := 0
 	memo := a.memo[in.ID]
-	if memo == nil {
+	tracked := memo != nil
+	if !tracked {
 		memo = map[memoKey]*memoVal{} // scratch: not kept
 	}
 	for i := 0; i < v.Lex.Len(); i++ {
@@ -314,7 +339,7 @@ func (a *Applier) applySound(v, nv *lex.Variety, in *Innovation, e lex.Entry) {
 				mv.illegal = !phon.Legal(&probe, &v.Phonotax)
 				mv.fin = finish(w, &v.Phonotax, nv.Stress, v.Repair, v.Epenth)
 			}
-			memo[k] = mv
+			a.remember(memo, k, mv, tracked)
 		}
 		if !mv.changed {
 			continue
@@ -348,7 +373,7 @@ func (a *Applier) applySound(v, nv *lex.Variety, in *Innovation, e lex.Entry) {
 					mv = &memoVal{w: w, changed: true}
 					mv.fin = finish(w, &v.Phonotax, nv.Stress, v.Repair, v.Epenth)
 				}
-				memo[mk] = mv
+				a.remember(memo, mk, mv, tracked)
 			}
 			if mv.changed {
 				cellChanges = append(cellChanges, changedCell{pi, k, mv})
@@ -439,3 +464,6 @@ func cmpFeat(a, b phon.FeatureSet) int {
 	}
 	return cmp.Compare(a.Mask, b.Mask)
 }
+
+// Entries reports how many memoised results are held.
+func (a *Applier) Entries() int { return a.entries }

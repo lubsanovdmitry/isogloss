@@ -98,9 +98,7 @@ func BenchmarkRun40(b *testing.B) {
 // TestSeedSweep checks calibration across seeds: after 1000 years most runs
 // should have several languages and keep roughly 80% of core vocabulary.
 func TestSeedSweep(t *testing.T) {
-	if testing.Short() {
-		t.Skip("slow")
-	}
+	heavy(t)
 	stats := runSeeds(1000, 16, 40)
 	var langs, ret []int
 	for _, st := range stats {
