@@ -41,30 +41,36 @@
   let overlay = $state<InnovInfo | null>(null);
   let frames = $state<Frame[]>([]);
   let viewIdx = $state(-1); // -1 = live
+  let past = $state<Snapshot | null>(null); // the full state at the frame looked at, once loaded
+  let viewReq = 0;
   let focusLang = $state(-1);
 
   const viewing = $derived(viewIdx >= 0 && viewIdx < frames.length ? frames[viewIdx] : null);
+  // What the panels show: the past moment once loaded, else the live run.
+  const shown = $derived(past ?? snap);
+  // While the slider moves only the language frames are drawn.
+  const framesOnly = $derived(!!viewing && !past);
   const langOf = $derived.by(() => {
     const n = world ? world.hexes.length : 0;
     const a = new Int32Array(n).fill(-1);
-    if (viewing) viewing.lang.forEach((l, i) => (a[i] = l));
-    else if (snap) for (const [h, , l] of snap.comms) a[h] = l;
+    if (framesOnly) viewing!.lang.forEach((l, i) => (a[i] = l));
+    else if (shown) for (const [h, , l] of shown.comms) a[h] = l;
     return a;
   });
   const polityOf = $derived.by(() => {
-    if (mapMode !== 'polities' || !snap || !world || viewing) return null;
+    if (mapMode !== 'polities' || !shown || !world || framesOnly) return null;
     const a = new Int32Array(world.hexes.length).fill(-1);
-    for (const [h, , , p] of snap.comms) a[h] = p;
+    for (const [h, , , p] of shown.comms) a[h] = p;
     return a;
   });
-  const capitals = $derived(snap && !viewing ? snap.polities.filter((p) => p.fell < 0).map((p) => p.capital) : []);
+  const capitals = $derived(shown && !framesOnly ? shown.polities.filter((p) => p.fell < 0).map((p) => p.capital) : []);
   const isoSet = $derived(overlay && !viewing ? new Set(overlay.applied) : null);
-  const nodes = $derived(new Map<number, TreeNode>((snap?.tree ?? []).map((n) => [n.id, n])));
-  const living = $derived(snap ? snap.langs.filter((l) => l.died < 0) : []);
+  const nodes = $derived(new Map<number, TreeNode>((shown?.tree ?? []).map((n) => [n.id, n])));
+  const living = $derived(shown ? shown.langs.filter((l) => l.died < 0) : []);
   const selPolity = $derived.by(() => {
-    if (!snap || selected < 0) return null;
-    const c = snap.comms.find((x) => x[0] === selected);
-    const p = c && c[3] >= 0 ? snap.polities.find((q) => q.id === c[3] && q.fell < 0) : undefined;
+    if (!shown || selected < 0) return null;
+    const c = shown.comms.find((x) => x[0] === selected);
+    const p = c && c[3] >= 0 ? shown.polities.find((q) => q.id === c[3] && q.fell < 0) : undefined;
     return p ? { id: p.id, name: p.name } : null;
   });
   const selLang = $derived(selected >= 0 ? langOf[selected] : -1);
@@ -100,6 +106,8 @@
       selected = -1;
       overlay = null;
       viewIdx = -1;
+      past = null;
+      viewReq++;
       focusLang = -1;
       await refreshSide();
     } catch (e: any) {
@@ -112,6 +120,8 @@
     if (!snap) return;
     busy = true;
     viewIdx = -1;
+    past = null;
+    viewReq++;
     try {
       accept(await engine.call<Snapshot>('step', { n, since: snap.eventCount }));
       await refreshSide();
@@ -136,14 +146,32 @@
     if (!viewing) return;
     running = false;
     busy = true;
-    status = `Replaying to year ${viewing.tick * YEARS}…`;
+    status = `Continuing from year ${viewing.tick * YEARS}…`;
     const r = await engine.call<{ world: World; snapshot: Snapshot }>('fork', { tick: viewing.tick });
     world = r.world;
     accept(r.snapshot, true);
     viewIdx = -1;
+    past = null;
+    viewReq++;
     await refreshSide();
-    status = `Forked at year ${r.snapshot.tick * YEARS}. Later interventions were dropped.`;
+    status = `Forked at year ${r.snapshot.tick * YEARS}. Your later actions were dropped; the scenario's own events still come.`;
     busy = false;
+  }
+
+  // Loads the full state of the frame looked at (or returns to the live run).
+  async function loadView() {
+    const req = ++viewReq;
+    const t = viewing ? viewing.tick : -1;
+    if (t >= 0) status = `Rebuilding year ${t * YEARS}…`;
+    try {
+      const s = await engine.call<Snapshot>('view', { tick: t });
+      if (req !== viewReq) return;
+      past = t >= 0 ? s : null;
+      status = '';
+      await refreshLabels();
+    } catch (e: any) {
+      if (req === viewReq) status = e.message ?? String(e);
+    }
   }
 
   async function showInnov(id: number) {
@@ -180,6 +208,9 @@
       world = r.world;
       seed = String(sv.save?.Seed ?? sv.seed ?? seed);
       accept(r.snapshot, true);
+      viewIdx = -1;
+      past = null;
+      viewReq++;
       await refreshSide();
     } catch (err: any) {
       status = 'Could not load that file: ' + (err.message ?? err);
@@ -212,7 +243,7 @@
   {#if snap}
     <p class="where">
       <span class="proto">{snap.proto}</span>
-      {#if viewing}<strong> as of year {viewing.tick * YEARS}</strong>{:else} · year {snap.tick * YEARS}, generation {snap.tick}{/if}
+      {#if viewing}<strong> as of year {viewing.tick * YEARS}</strong>{#if framesOnly} <span class="soft">(map only)</span>{/if}{:else} · year {snap.tick * YEARS}, generation {snap.tick}{/if}
       · {living.length} {living.length === 1 ? 'language' : 'languages'}
     </p>
   {/if}
@@ -242,9 +273,9 @@
 <main>
   <section class="atlas" aria-label="Map">
     {#if world}
-      <Atlas {world} {langOf} {selected} isogloss={isoSet} level={!viewing ? overlay?.level : null} substrates={showSubs} {polityOf} {capitals} routes={viewing ? [] : (snap?.routes ?? [])} labels={viewing ? [] : labels} onselect={select} />
+      <Atlas {world} {langOf} {selected} isogloss={isoSet} level={!viewing ? overlay?.level : null} substrates={showSubs} {polityOf} {capitals} routes={framesOnly ? [] : (shown?.routes ?? [])} labels={framesOnly ? [] : labels} onselect={select} />
       <div class="under">
-        {#if selected >= 0}<PlaceCard {engine} hex={selected} tick={snap?.tick ?? 0} />{/if}
+        {#if selected >= 0}<PlaceCard {engine} hex={selected} tick={shown?.tick ?? 0} />{/if}
         <div class="seg mapmode" role="group" aria-label="Map colours">
           <button aria-pressed={mapMode === 'langs'} onclick={() => (mapMode = 'langs')}>Languages</button>
           <button aria-pressed={mapMode === 'polities'} onclick={() => (mapMode = 'polities')}>Polities</button>
@@ -275,7 +306,8 @@
             Look back
             <input
               type="range" min="0" max={frames.length} value={viewIdx < 0 ? frames.length : viewIdx}
-              oninput={(e) => { const v = +e.currentTarget.value; viewIdx = v >= frames.length ? -1 : v; }}
+              oninput={(e) => { const v = +e.currentTarget.value; viewIdx = v >= frames.length ? -1 : v; past = null; }}
+              onchange={loadView}
               aria-label="Show the language map at an earlier time"
             />
           </label>
@@ -294,35 +326,35 @@
       {/each}
     </div>
     <div class="panel" role="tabpanel">
-      {#if snap}
+      {#if snap && shown}
         {#if tab === 'campaign'}
-          <CampaignPanel {engine} tick={snap.tick} hex={selected} onscheduled={(m) => (status = m)} oninnov={showInnov} />
+          <CampaignPanel {engine} tick={shown.tick} hex={selected} onscheduled={(m) => (status = m)} oninnov={showInnov} />
         {:else if tab === 'stories'}
           {#await import('./lib/StoryPanel.svelte') then { default: StoryPanel }}
-            <StoryPanel {engine} seed={snap.seed} tick={snap.tick} langs={living} polities={snap.polities.filter((p) => p.fell < 0)} />
+            <StoryPanel {engine} seed={snap.seed} tick={shown.tick} langs={living} polities={shown.polities.filter((p) => p.fell < 0)} />
           {/await}
         {:else if tab === 'tree'}
           {#if nodes.get(0)}
-            <ul class="tree"><TreeItem node={nodes.get(0)!} {nodes} langs={snap.langs} proto={snap.proto}
+            <ul class="tree"><TreeItem node={nodes.get(0)!} {nodes} langs={shown.langs} proto={shown.proto}
               onlang={(id) => { focusLang = id; tab = 'lang'; }} oninnov={showInnov} /></ul>
           {/if}
           <p class="hint">Subgroups are defined by the changes all their members share (sounds, grammar, word order), as in the comparative method. Click a change to draw its isogloss.</p>
         {:else if tab === 'word'}
-          <WordPanel {engine} hex={selected} tick={snap.tick} {concepts} {concept} {cell} {cells}
+          <WordPanel {engine} hex={selected} tick={shown.tick} {concepts} {concept} {cell} {cells}
             onconcept={(c) => { concept = c; cell = -1; }} oncell={(k) => (cell = k)} />
         {:else if tab === 'table'}
-          <TablePanel {engine} tick={snap.tick} onpick={(c) => { concept = c; cell = -1; tab = 'word'; }} />
+          <TablePanel {engine} tick={shown.tick} onpick={(c) => { concept = c; cell = -1; tab = 'word'; }} />
         {:else if tab === 'intel'}
-          <IntelPanel {engine} tick={snap.tick} onlang={(id) => { focusLang = id; tab = 'lang'; }} />
+          <IntelPanel {engine} tick={shown.tick} onlang={(id) => { focusLang = id; tab = 'lang'; }} />
         {:else if tab === 'lang'}
-          <LangPanel {engine} lang={shownLang} tick={snap.tick} oninnov={showInnov}
+          <LangPanel {engine} lang={shownLang} tick={shown.tick} oninnov={showInnov}
             oncell={(c, k) => { concept = c; cell = k; if (selected < 0 || langOf[selected] !== shownLang) selected = living.find((l) => l.id === shownLang)?.centre ?? selected; tab = 'word'; }} />
         {:else if tab === 'fable'}
-          <FablePanel {engine} tick={snap.tick} onlang={(id) => { focusLang = id; tab = 'lang'; }} />
+          <FablePanel {engine} tick={shown.tick} onlang={(id) => { focusLang = id; tab = 'lang'; }} />
         {:else if tab === 'rules'}
           <RulePanel {engine} hex={selected} polity={selPolity} onscheduled={(m) => (status = m)} />
         {:else}
-          <Chronicle {events} oninnov={showInnov} onhex={select} />
+          <Chronicle events={past ? events.filter((e) => e.tick <= past!.tick) : events} oninnov={showInnov} onhex={select} />
         {/if}
       {/if}
     </div>
@@ -342,6 +374,7 @@
   .scen { margin: 0.2rem 0 0.4rem; font-size: var(--t-sm); color: var(--ink-soft); max-width: 70rem; }
   .scen strong { color: var(--ink); }
   .scen .soft { margin-left: 0.3rem; }
+  .where .soft { font-size: var(--t-xs); }
   header {
     display: grid;
     grid-template-columns: auto 1fr;

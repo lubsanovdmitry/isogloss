@@ -346,7 +346,7 @@ func scriptType(name string) society.ScriptType {
 // scheduleEvents turns scenario events into interventions.
 func (s *Sim) scheduleEvents(sc *scenario.Scenario) error {
 	for _, e := range sc.Events {
-		iv := Intervention{Tick: e.Tick, Kind: e.Do, Hex: -1, From: -1, Polity: e.Polity, Rule: e.What}
+		iv := Intervention{Tick: e.Tick, Kind: e.Do, Hex: -1, From: -1, Polity: e.Polity, Rule: e.What, Scripted: true}
 		if e.Place != "" {
 			h, err := s.Place(e.Place)
 			if err != nil {

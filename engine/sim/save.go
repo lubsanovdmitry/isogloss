@@ -25,6 +25,9 @@ type Intervention struct {
 	Rule   string // rule source; script type; concept label (invent)
 	Innov  uint32 // encourage, suppress: the innovation
 	Paid   bool   // a campaign action: costs influence when it happens
+	// Scripted marks a scenario's own event: a fork keeps it even when it
+	// falls after the fork (the history the scenario promises still comes).
+	Scripted bool
 }
 
 // Save is everything needed to rebuild a run.
@@ -81,41 +84,68 @@ func Replay(sv Save) *Sim {
 
 // ReplayErr is Replay for saves whose scenario may not parse.
 func ReplayErr(sv Save) (*Sim, error) {
+	s, _, err := replay(sv, false)
+	return s, err
+}
+
+// ReplayTimeline replays a save, keeping a timeline of it on the way.
+func ReplayTimeline(sv Save) (*Sim, *Timeline, error) { return replay(sv, true) }
+
+func replay(sv Save, keep bool) (*Sim, *Timeline, error) {
 	var sc *scenario.Scenario
 	if sv.Scenario != "" {
 		var err error
 		if sc, err = scenario.Read(sv.Scenario); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	s, err := NewScenario(sv.Seed, sv.Config, sc)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if sc != nil {
 		s.Cfg = sv.Config // the save's config already has the overrides
 	}
+	scheduled := s.Interventions
 	s.Interventions = slices.Clone(sv.Interventions)
+	for i := range s.Interventions {
+		// Saves written before events were marked: recognise them.
+		iv := s.Interventions[i]
+		iv.Scripted, iv.Paid = true, false
+		s.Interventions[i].Scripted = slices.Contains(scheduled, iv)
+	}
 	s.Annotations = slices.Clone(sv.Annotations)
+	var tl *Timeline
+	if keep {
+		tl = NewTimeline(s)
+	}
 	for s.Tick < sv.Tick {
 		s.Step()
+		if tl != nil {
+			tl.Record(s)
+		}
 	}
-	return s, nil
+	return s, tl, nil
 }
 
-// Fork returns a save of this run truncated at tick t (interventions after
-// t are dropped), to explore a what-if from that point.
+// Fork returns a save of this run truncated at tick t (the player's
+// interventions after t are dropped; the scenario's own events stay), to
+// explore a what-if from that point.
 func (s *Sim) Fork(t int32) Save {
 	sv := s.SaveState()
 	sv.Tick = min(t, s.Tick)
+	sv.Interventions = keptAt(sv.Interventions, sv.Tick)
+	return sv
+}
+
+func keptAt(ivs []Intervention, t int32) []Intervention {
 	var kept []Intervention
-	for _, iv := range sv.Interventions {
-		if iv.Tick <= sv.Tick {
+	for _, iv := range ivs {
+		if iv.Tick <= t || iv.Scripted {
 			kept = append(kept, iv)
 		}
 	}
-	sv.Interventions = kept
-	return sv
+	return kept
 }
 
 // Intervene schedules an intervention for the next tick after validating it.

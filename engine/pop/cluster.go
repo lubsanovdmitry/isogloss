@@ -139,3 +139,6 @@ func (cl *Clusterer) Cluster(comms []*Community, byHex []*Community, nbrs func(i
 	}
 	return groups
 }
+
+// Reset empties the intelligibility cache (a clone starts with none).
+func (cl *Clusterer) Reset() { cl.cache = map[[2]uint64]fx.Q16{} }

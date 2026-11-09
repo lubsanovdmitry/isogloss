@@ -14,6 +14,9 @@ func NewWave(n int) *Wave {
 	return &Wave{Level: make([]fx.Q16, n), Applied: make([]bool, n), next: make([]fx.Q16, n)}
 }
 
+// ResetScratch gives a copied wave its own scratch buffer.
+func (w *Wave) ResetScratch() { w.next = make([]fx.Q16, len(w.Level)) }
+
 var floor = fx.One / 200 // levels below this die out
 
 // Step advances the wave one tick:

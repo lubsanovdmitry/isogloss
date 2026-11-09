@@ -12,7 +12,8 @@
 //	query    {kind, ...}                 compare | corresp | intel | lang | sketch | paradigm | cell | fable | word | innov | innovs | preview | frames | concepts | labels | place
 //	save                                 returns the save (seed, tick, interventions)
 //	load     {save}                      replay a save
-//	fork     {tick}                      replay this run truncated at tick
+//	view     {tick}                      look at the run as it was at tick (-1: live); queries follow
+//	fork     {tick}                      continue from tick, dropping later player actions
 //	bench    {seed, ticks}               time a fresh run (ms)
 package main
 
@@ -27,7 +28,20 @@ import (
 	"isogloss/engine/sim"
 )
 
-var cur *sim.Sim
+var (
+	cur  *sim.Sim
+	tl   *sim.Timeline // snapshots of cur for looking back and forking
+	view *sim.Sim      // the past moment being looked at, nil for live
+)
+
+// setRun makes s the live run with a fresh timeline.
+func setRun(s *sim.Sim, t *sim.Timeline) {
+	cur, view = s, nil
+	if t == nil {
+		t = sim.NewTimeline(s)
+	}
+	tl = t
+}
 
 func errJSON(msg string) string {
 	var j render.JSON
@@ -56,7 +70,7 @@ func saveJSON(sv sim.Save) string {
 		KI("tick", int64(sv.Tick)).KI("threshold", int64(sv.Config.Threshold)).KS("scenario", sv.Scenario).K("interventions").Arr()
 	for _, iv := range sv.Interventions {
 		j.Obj().KI("tick", int64(iv.Tick)).KS("kind", iv.Kind).KI("hex", int64(iv.Hex)).KI("from", int64(iv.From)).
-			KI("polity", int64(iv.Polity)).KS("rule", iv.Rule).KU("innov", uint64(iv.Innov)).KB("paid", iv.Paid).End()
+			KI("polity", int64(iv.Polity)).KS("rule", iv.Rule).KU("innov", uint64(iv.Innov)).KB("paid", iv.Paid).KB("scripted", iv.Scripted).End()
 	}
 	j.EndArr().K("annotations").Arr()
 	for _, a := range sv.Annotations {
@@ -80,7 +94,7 @@ func parseSave(v js.Value) (sim.Save, bool) {
 			sv.Interventions = append(sv.Interventions, sim.Intervention{
 				Tick: int32(num(x, "tick", 0)), Kind: str(x, "kind"), Hex: int32(num(x, "hex", -1)), Rule: str(x, "rule"),
 				From: int32(num(x, "from", -1)), Polity: int32(num(x, "polity", -1)),
-				Innov: uint32(num(x, "innov", 0)), Paid: x.Get("paid").Truthy(),
+				Innov: uint32(num(x, "innov", 0)), Paid: x.Get("paid").Truthy(), Scripted: x.Get("scripted").Truthy(),
 			})
 		}
 	}
@@ -168,12 +182,14 @@ func handle(cmd js.Value) string {
 		if e != nil {
 			return errJSON(e.Error())
 		}
-		cur = s
+		setRun(s, nil)
 		return withWorld(cur, 0)
 	case "step":
+		view = nil
 		n := num(cmd, "n", 1)
 		for i := 0; i < n; i++ {
 			cur.Step()
+			tl.Record(cur)
 		}
 		return string(render.SnapshotJSON(cur, num(cmd, "since", 0)))
 	case "snapshot":
@@ -199,14 +215,31 @@ func handle(cmd js.Value) string {
 		if !ok {
 			return errJSON("bad save")
 		}
-		s, err := sim.ReplayErr(sv)
+		s, t, err := sim.ReplayTimeline(sv)
 		if err != nil {
 			return errJSON(err.Error())
 		}
-		cur = s
+		setRun(s, t)
 		return withWorld(cur, 0)
+	case "view":
+		// Look at the run as it was at tick t (t < 0 or ≥ now: live).
+		t := int32(num(cmd, "tick", -1))
+		if t < 0 || t >= cur.Tick {
+			view = nil
+			return string(render.SnapshotJSON(cur, 0))
+		}
+		if view == nil || view.Tick != t {
+			view = tl.At(cur, t)
+		}
+		return string(render.SnapshotJSON(view, 0))
 	case "fork":
-		cur = sim.Replay(cur.Fork(int32(num(cmd, "tick", int(cur.Tick)))))
+		t := int32(num(cmd, "tick", int(cur.Tick)))
+		f := view
+		if f == nil || f.Tick != t {
+			f = tl.At(cur, t)
+		}
+		tl.Truncate(t)
+		cur, view = f, nil
 		return withWorld(cur, 0)
 	case "bench":
 		seed, err := parseSeed(cmd)
@@ -219,12 +252,18 @@ func handle(cmd js.Value) string {
 		ms := time.Since(start).Milliseconds()
 		return `{"ms":` + strconv.FormatInt(ms, 10) + `,"languages":` + strconv.Itoa(len(s.LivingLanguages())) + `}`
 	case "query":
-		return query(cmd)
+		if view != nil {
+			return query(cmd, view)
+		}
+		return query(cmd, cur)
 	}
 	return errJSON("unknown command")
 }
 
-func query(q js.Value) string {
+// query answers a view query against s: the live run, or the past
+// moment being looked at (frames, annotations and saves always come from
+// the live run).
+func query(q js.Value, s *sim.Sim) string {
 	kind := str(q, "kind")
 	if kind == "concepts" {
 		return string(render.ConceptsJSON())
@@ -235,14 +274,14 @@ func query(q js.Value) string {
 	if kind == "scenarios" {
 		return string(render.ScenariosJSON())
 	}
-	if cur == nil {
+	if s == nil {
 		return errJSON("no run")
 	}
 	switch kind {
 	case "compare":
-		return string(render.Compare(cur, q.Get("core").Truthy()).JSON(cur))
+		return string(render.Compare(s, q.Get("core").Truthy()).JSON(s))
 	case "lang":
-		return string(render.LangJSON(cur, int32(num(q, "id", -1))))
+		return string(render.LangJSON(s, int32(num(q, "id", -1))))
 	case "word":
 		c := lex.ConceptID(num(q, "concept", 0))
 		if l := str(q, "label"); l != "" {
@@ -250,44 +289,44 @@ func query(q js.Value) string {
 				c = id
 			}
 		}
-		e, ok := render.EtymOf(cur, int32(num(q, "hex", -1)), c)
+		e, ok := render.EtymOf(s, int32(num(q, "hex", -1)), c)
 		if !ok {
 			return errJSON("no such word")
 		}
 		return string(e.JSON())
 	case "innov":
-		return string(render.InnovJSON(cur, uint32(num(q, "id", 0))))
+		return string(render.InnovJSON(s, uint32(num(q, "id", 0))))
 	case "innovs":
-		return string(render.InnovListJSON(cur, num(q, "min", 3)))
+		return string(render.InnovListJSON(s, num(q, "min", 3)))
 	case "preview":
-		return string(render.PreviewJSON(cur, int32(num(q, "hex", -1)), str(q, "rule")))
+		return string(render.PreviewJSON(s, int32(num(q, "hex", -1)), str(q, "rule")))
 	case "sketch":
-		return string(render.SketchJSON(cur, int32(num(q, "id", -1))))
+		return string(render.SketchJSON(s, int32(num(q, "id", -1))))
 	case "paradigm":
 		c, _ := lex.ConceptByLabel(str(q, "label"))
-		return string(render.ParadigmJSON(cur, int32(num(q, "lang", -1)), c))
+		return string(render.ParadigmJSON(s, int32(num(q, "lang", -1)), c))
 	case "cell":
 		c, ok := lex.ConceptByLabel(str(q, "label"))
 		if !ok {
 			return errJSON("no such word")
 		}
-		return string(render.CellEtymJSON(cur, int32(num(q, "hex", -1)), c, num(q, "cell", 0)))
+		return string(render.CellEtymJSON(s, int32(num(q, "hex", -1)), c, num(q, "cell", 0)))
 	case "fable":
-		return string(render.FableJSON(cur))
+		return string(render.FableJSON(s))
 	case "corresp":
-		return string(render.CorrespondencesJSON(cur, num(q, "min", 2)))
+		return string(render.CorrespondencesJSON(s, num(q, "min", 2)))
 	case "intel":
-		return string(render.IntelJSON(cur))
+		return string(render.IntelJSON(s))
 	case "frames":
 		return string(render.FramesJSON(cur))
 	case "namecands":
 		id := int32(num(q, "id", -1))
 		if str(q, "kind") == "polity" {
-			return string(render.CandidatesJSON(render.PolityNameCandidates(cur, id)))
+			return string(render.CandidatesJSON(render.PolityNameCandidates(s, id)))
 		}
-		return string(render.CandidatesJSON(render.LangNameCandidates(cur, id)))
+		return string(render.CandidatesJSON(render.LangNameCandidates(s, id)))
 	case "era":
-		return string(render.EraJSON(cur, int32(num(q, "from", 0)), int32(num(q, "to", int(cur.Tick)+1))))
+		return string(render.EraJSON(s, int32(num(q, "from", 0)), int32(num(q, "to", int(s.Tick)+1))))
 	case "mythspec":
 		return string(render.MythSpecJSON())
 	case "rendertext":
@@ -295,7 +334,7 @@ func query(q js.Value) string {
 		if err != nil {
 			return errJSON(err.Error())
 		}
-		return string(render.TextJSON(cur, cl))
+		return string(render.TextJSON(s, cl))
 	case "annotations":
 		var j render.JSON
 		j.Arr()
@@ -305,11 +344,11 @@ func query(q js.Value) string {
 		j.EndArr()
 		return j.String()
 	case "campaign":
-		return string(render.CampaignJSON(cur, true))
+		return string(render.CampaignJSON(s, true))
 	case "labels":
-		return string(render.LabelsJSON(cur, num(q, "max", 14)))
+		return string(render.LabelsJSON(s, num(q, "max", 14)))
 	case "place":
-		return string(render.PlaceJSON(cur, int32(num(q, "hex", -1))))
+		return string(render.PlaceJSON(s, int32(num(q, "hex", -1))))
 	case "save":
 		return saveJSON(cur.SaveState())
 	}
