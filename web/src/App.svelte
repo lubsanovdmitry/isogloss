@@ -14,6 +14,7 @@
   import PlaceCard from './lib/PlaceCard.svelte';
   import CampaignPanel from './lib/CampaignPanel.svelte';
   import { langColor } from './lib/palette';
+  import SettingsPanel from './lib/SettingsPanel.svelte';
 
   const engine = new Engine();
   const YEARS = 25;
@@ -23,6 +24,25 @@
   let events = $state<Event[]>([]);
   let concepts = $state<Concept[]>([]);
   let seed = $state('42');
+  // Run settings that differ from the engine defaults (kept in this browser).
+  let cfgDefaults = $state<Record<string, number>>({});
+  let cfg = $state<Record<string, number>>(loadCfg());
+  let showSettings = $state(false);
+  function loadCfg(): Record<string, number> {
+    try {
+      return JSON.parse(localStorage.getItem('isogloss.settings') ?? '{}') ?? {};
+    } catch {
+      return {};
+    }
+  }
+  function setCfg(o: Record<string, number>) {
+    cfg = o;
+    try {
+      localStorage.setItem('isogloss.settings', JSON.stringify(o));
+    } catch {
+      /* storage unavailable: settings last for this page */
+    }
+  }
   let scenarioID = $state('');
   let scenarios = $state<ScenarioEntry[]>([]);
   let selected = $state(-1);
@@ -132,7 +152,10 @@
     busy = true;
     status = 'Generating a continent and its proto-language…';
     try {
-      const r = await engine.call<{ world: World; snapshot: Snapshot }>('init', { seed: seed.trim() || '1', scenario: scenarioID });
+      const r = await engine.call<{ world: World; snapshot: Snapshot }>('init', { seed: seed.trim() || '1', scenario: scenarioID, config: { ...cfg } });
+      labels = []; // the old world's hexes
+      wordMap = null;
+      selected = -1;
       world = r.world;
       accept(r.snapshot, true);
       if (r.snapshot.campaign) tab = 'campaign';
@@ -182,6 +205,7 @@
     busy = true;
     status = `Continuing from year ${viewing.tick * YEARS}…`;
     const r = await engine.call<{ world: World; snapshot: Snapshot }>('fork', { tick: viewing.tick });
+    labels = [];
     world = r.world;
     accept(r.snapshot, true);
     viewIdx = -1;
@@ -239,6 +263,7 @@
     try {
       const sv = JSON.parse(await f.text());
       const r = await engine.call<{ world: World; snapshot: Snapshot }>('load', { save: sv.save ?? sv });
+      labels = [];
       world = r.world;
       seed = String(sv.save?.Seed ?? sv.seed ?? seed);
       accept(r.snapshot, true);
@@ -259,6 +284,7 @@
   }
 
   onMount(async () => {
+    cfgDefaults = await engine.query<Record<string, number>>('config');
     concepts = await engine.query<Concept[]>('concepts');
     scenarios = await engine.query<ScenarioEntry[]>('scenarios');
     cells = await engine.query<Record<string, string[]>>('cells');
@@ -293,6 +319,7 @@
         {#each scenarios as sc (sc.id)}<option value={sc.id}>{sc.name}</option>{/each}
       </select>
     </label>
+    <button onclick={() => (showSettings = !showSettings)} aria-expanded={showSettings}>Settings{Object.keys(cfg).length ? ` (${Object.keys(cfg).length} changed)` : ''}</button>
     <button onclick={newRun} disabled={busy && !running}>New world</button>
     <span class="sep"></span>
     <button onclick={() => step(1)} disabled={busy || running}>Next generation</button>
@@ -302,6 +329,9 @@
       <input type="range" min="1" max="10" bind:value={speed} aria-label="Generations per second" />
     </label>
   </div>
+  {#if showSettings}
+    <SettingsPanel defaults={cfgDefaults} overrides={cfg} onchange={setCfg} />
+  {/if}
 </header>
 
 <main>

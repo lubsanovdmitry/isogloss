@@ -5,7 +5,7 @@
 //
 // Commands (plain JS objects, field "cmd"):
 //
-//	init     {seed, threshold?}          new run; returns world + snapshot
+//	init     {seed, threshold?, config?}  new run (config: named settings); returns world + snapshot
 //	step     {n, since}                  advance n ticks; returns snapshot
 //	snapshot {since}
 //	intervene{rule, hex}                 schedule a rule for the next tick
@@ -68,7 +68,11 @@ func str(v js.Value, k string) string {
 func saveJSON(sv sim.Save) string {
 	var j render.JSON
 	j.Obj().KI("version", int64(sv.Version)).KS("seed", strconv.FormatUint(sv.Seed, 10)).
-		KI("tick", int64(sv.Tick)).KI("threshold", int64(sv.Config.Threshold)).KS("scenario", sv.Scenario).K("interventions").Arr()
+		KI("tick", int64(sv.Tick)).KI("threshold", int64(sv.Config.Threshold)).KS("scenario", sv.Scenario).K("config").Obj()
+	for _, st := range sv.Config.Settings() {
+		j.KI(st.Key, st.Value)
+	}
+	j.End().K("interventions").Arr()
 	for _, iv := range sv.Interventions {
 		j.Obj().KI("tick", int64(iv.Tick)).KS("kind", iv.Kind).KI("hex", int64(iv.Hex)).KI("from", int64(iv.From)).
 			KI("polity", int64(iv.Polity)).KS("rule", iv.Rule).KU("innov", uint64(iv.Innov)).KB("paid", iv.Paid).KB("scripted", iv.Scripted).End()
@@ -88,6 +92,9 @@ func parseSave(v js.Value) (sim.Save, bool) {
 	}
 	sv := sim.Save{Version: 1, Seed: seed, Config: sim.DefaultConfig(), Tick: int32(num(v, "tick", 0)), Scenario: str(v, "scenario")}
 	sv.Config.Threshold = uint32(num(v, "threshold", 0))
+	if err := applyConfig(&sv.Config, v.Get("config")); err != "" {
+		return sim.Save{}, false
+	}
 	ivs := v.Get("interventions")
 	if ivs.Type() == js.TypeObject {
 		for i := 0; i < ivs.Length(); i++ {
@@ -151,6 +158,34 @@ func parseSeed(cmd js.Value) (uint64, string) {
 	return 0, "the seed must be a whole number"
 }
 
+// applyConfig applies named settings from a JS object ({"sound-rate": 90});
+// it returns an error message, or "".
+func applyConfig(cfg *sim.Config, v js.Value) string {
+	if v.Type() != js.TypeObject {
+		return ""
+	}
+	keys := js.Global().Get("Object").Call("keys", v)
+	for i := 0; i < keys.Length(); i++ {
+		k := keys.Index(i).String()
+		x := v.Get(k)
+		if x.Type() != js.TypeNumber && x.Type() != js.TypeBoolean {
+			return "setting " + k + " is not a number"
+		}
+		n := int64(0)
+		if x.Type() == js.TypeBoolean {
+			if x.Bool() {
+				n = 1
+			}
+		} else {
+			n = int64(x.Float())
+		}
+		if err := sim.ApplySetting(cfg, k, n); err != nil {
+			return err.Error()
+		}
+	}
+	return ""
+}
+
 func withWorld(s *sim.Sim, since int) string {
 	return `{"world":` + string(render.WorldJSON(s)) + `,"snapshot":` + string(render.SnapshotJSON(s, since)) + `}`
 }
@@ -168,6 +203,9 @@ func handle(cmd js.Value) string {
 		}
 		cfg := sim.DefaultConfig()
 		cfg.Threshold = uint32(num(cmd, "threshold", 0))
+		if err := applyConfig(&cfg, cmd.Get("config")); err != "" {
+			return errJSON(err)
+		}
 		var sc *scenario.Scenario
 		if id := str(cmd, "scenario"); id != "" {
 			src := str(cmd, "source")
@@ -271,6 +309,14 @@ func query(q js.Value, s *sim.Sim) string {
 	}
 	if kind == "cells" {
 		return string(render.CellsJSON())
+	}
+	if kind == "config" {
+		var j render.JSON
+		j.Obj()
+		for _, st := range sim.DefaultConfig().Settings() {
+			j.KI(st.Key, st.Value)
+		}
+		return j.End().String()
 	}
 	if kind == "scenarios" {
 		return string(render.ScenariosJSON())

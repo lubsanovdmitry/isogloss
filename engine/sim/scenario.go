@@ -200,10 +200,58 @@ func applySetting(c *Config, key string, v int64) error {
 		c.SmallBias = u
 	case "large-bias":
 		c.LargeBias = u
+	case "candidates":
+		c.Candidates = int(max(v, 1))
+	case "cluster-every":
+		c.ClusterEvery = int32(max(v, 1))
+	case "width":
+		c.World.W = int32(min(max(v, 12), 48))
+	case "height":
+		c.World.H = int32(min(max(v, 10), 40))
+	case "land":
+		c.World.Land = int(min(max(v, 40), 1400))
+	case "rivers":
+		c.World.Rivers = int(min(max(v, 0), 40))
+	case "shape":
+		c.World.Shape = world.Shape(min(max(v, 0), 2))
 	default:
 		return errors.New("unknown config key '" + key + "'")
 	}
 	return nil
+}
+
+// ApplySetting sets one config value by name, as a scenario's config
+// section does (the world's size, land, rivers and shape too).
+func ApplySetting(c *Config, key string, v int64) error { return applySetting(c, key, v) }
+
+// Setting is one named config value.
+type Setting struct {
+	Key   string
+	Value int64
+}
+
+// Settings lists every config value by name; applying them to
+// DefaultConfig rebuilds c (TestSettingsRoundTrip), which is how saves
+// carry a run's config.
+func (c Config) Settings() []Setting {
+	b := func(x bool) int64 {
+		if x {
+			return 1
+		}
+		return 0
+	}
+	return []Setting{
+		{"sound-rate", int64(c.SoundRate)}, {"lex-rate", int64(c.LexRate)}, {"homeland-radius", int64(c.HomelandRadius)},
+		{"threshold", int64(c.Threshold)}, {"gram-rate", int64(c.GramRate)}, {"analogy-rate", int64(c.AnalogyRate)},
+		{"order-rate", int64(c.OrderRate)}, {"sem-rate", int64(c.SemRate)}, {"loan-rate", int64(c.LoanRate)},
+		{"invent-rate", int64(c.InventRate)}, {"substrates", int64(c.Substrates)}, {"substrate-rate", int64(c.SubstrateRate)},
+		{"cross-lang", int64(c.CrossLang)}, {"society", b(c.Society)}, {"polity-rate", int64(c.PolityRate)},
+		{"conquest-rate", int64(c.ConquestRate)}, {"collapse-rate", int64(c.CollapseRate)}, {"script-rate", int64(c.ScriptRate)},
+		{"seafaring", b(c.Seafaring)}, {"small-bias", int64(c.SmallBias)}, {"large-bias", int64(c.LargeBias)},
+		{"candidates", int64(c.Candidates)}, {"cluster-every", int64(c.ClusterEvery)},
+		{"width", int64(c.World.W)}, {"height", int64(c.World.H)}, {"land", int64(c.World.Land)},
+		{"rivers", int64(c.World.Rivers)}, {"shape", int64(c.World.Shape)},
+	}
 }
 
 func (s *Sim) nearestFamily(homes []int32, h int32) uint8 {

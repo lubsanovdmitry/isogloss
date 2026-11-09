@@ -215,3 +215,20 @@ func TestStartersShowWhatTheyPromise(t *testing.T) {
 		}
 	})
 }
+
+// TestSettingsRoundTrip: a config written as named settings and applied to
+// the defaults comes back unchanged (saves carry configs this way).
+func TestSettingsRoundTrip(t *testing.T) {
+	c := DefaultConfig()
+	c.SoundRate, c.LexRate, c.Threshold, c.Society = 120, 900, 400, false
+	c.World.W, c.World.H, c.World.Land, c.World.Shape, c.World.Rivers = 30, 22, 380, 1, 14
+	got := DefaultConfig()
+	for _, st := range c.Settings() {
+		if err := ApplySetting(&got, st.Key, st.Value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got != c {
+		t.Errorf("round trip: %+v, want %+v", got, c)
+	}
+}

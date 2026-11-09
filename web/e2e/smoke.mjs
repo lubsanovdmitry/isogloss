@@ -230,6 +230,24 @@ await page.getByRole('tab', { name: 'Stories' }).click();
 await page.waitForSelector('text=The mocked era');
 check(requests.length === before, 'stored stories are not asked for again');
 
+// ---- Settings: a smaller map and faster sound change, then back to defaults.
+await page.getByRole('button', { name: /^Settings/ }).click();
+await page.locator('.settings select').first().selectOption('small');
+await page.locator('.settings label.sl', { hasText: 'Sound changes' }).locator('input').evaluate((el) => {
+  el.value = '5';
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+});
+const label = (await page.getByRole('button', { name: /^Settings/ }).textContent())?.trim();
+await page.getByRole('button', { name: 'New world' }).click();
+await page.waitForFunction(() => document.querySelectorAll('svg[role="application"] polygon.land, svg[role="application"] polygon:not(.land)').length > 0 && !document.querySelector('.status')?.textContent?.includes('Generating'), null, { timeout: 60000 });
+await page.waitForTimeout(500);
+const hexes = await page.locator('svg[role="application"] > polygon:not(.sel):not(.wave)').count();
+check(label === 'Settings (4 changed)' && hexes === 20 * 15, `custom settings make a small world (${label}; ${hexes} hexes)`);
+await page.getByRole('button', { name: 'Reset to defaults' }).click();
+await page.getByRole('button', { name: 'New world' }).click();
+await page.waitForFunction(() => document.querySelectorAll('svg[role="application"] > polygon:not(.sel):not(.wave)').length === 26 * 20, null, { timeout: 60000 });
+check(true, 'defaults restored');
+
 // ---- Timing.
 await page.getByRole('button', { name: 'Time 1000 years' }).click();
 await page.waitForFunction(() => /simulated in \d+ ms/.test(document.querySelector('.status')?.textContent ?? ''), null, { timeout: 120000 });

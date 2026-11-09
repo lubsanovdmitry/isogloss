@@ -74,6 +74,7 @@
   );
   const routePath = $derived(
     routes
+      .filter((p) => p.every((h) => world.hexes[h]))
       .map((p) => p.map((h, i) => `${i ? 'L' : 'M'}${cx(world.hexes[h].col, world.hexes[h].row).toFixed(1)},${cy(world.hexes[h].row).toFixed(1)}`).join(''))
       .join(''),
   );
@@ -150,7 +151,7 @@
   <path d={coast} class="coast" />
   <path d={borders} class="border" />
   {#if routePath}<path d={routePath} class="route" />{/if}
-  {#each capitals as h (h)}
+  {#each capitals.filter((h) => world.hexes[h]) as h (h)}
     {@const hx = world.hexes[h]}
     <circle cx={cx(hx.col, hx.row)} cy={cy(hx.row)} r="3.6" class="capital" />
   {/each}
@@ -162,13 +163,13 @@
       <text x={cx(h.col, h.row)} y={cy(h.row)} class="sublabel">{sb.name}</text>
     {/each}
   {/if}
-  {#each labels as lb (lb.hex)}
+  {#each labels.filter((lb) => world.hexes[lb.hex]) as lb (lb.hex)}
     {@const hx = world.hexes[lb.hex]}
     <text x={cx(hx.col, hx.row)} y={cy(hx.row) - (lb.capital ? 7 : 0)} class="place" class:cap={lb.capital}>
       <title>{lb.name}</title>{lb.short}
     </text>
   {/each}
-  {#if selected >= 0}
+  {#if selected >= 0 && polys[selected]}
     <polygon points={polys[selected]} class="sel" />
   {/if}
 </svg>

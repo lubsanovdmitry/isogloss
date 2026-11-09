@@ -431,3 +431,13 @@ ten commonest; Word lists → Dialects lists, for one language, every local
 form of each word with the number of communities using it, roots shaded
 and the word-list form in bold (`render.DialectMapJSON`,
 `DialectTableJSON`).
+
+**Settings.** Every config value has a name (`sim.ApplySetting`, the
+scenario `config:` keys plus width, height, land, rivers, shape,
+candidates, cluster-every) and `Config.Settings()` lists them all;
+browser saves now carry the whole config this way (they used to keep
+only the threshold, so a custom run would not have replayed). The
+Settings panel offers rate multipliers (×0.25–×3) for sound change, word
+replacement, meaning shifts, borrowing, grammaticalization, analogy and
+word order; the language threshold; society on/off with polity, conquest,
+collapse and writing rates; map size, shape, rivers and substrates.
