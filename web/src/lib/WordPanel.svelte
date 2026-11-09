@@ -12,18 +12,6 @@
   let cet = $state<CellEtym | null>(null);
   let error = $state('');
 
-  // Concepts by semantic field, alphabetical within each (· marks words
-  // outside the Swadesh list: grammar sources and cultural items).
-  const groups = $derived.by(() => {
-    const m = new Map<string, Concept[]>();
-    for (const c of concepts) {
-      const f = c.field || 'Other';
-      if (!m.has(f)) m.set(f, []);
-      m.get(f)!.push(c);
-    }
-    for (const cs of m.values()) cs.sort((a, b) => a.label.localeCompare(b.label));
-    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-  });
   const pos = $derived(concepts.find((c) => c.label === concept)?.pos);
   const forms = $derived(pos ? cells[pos] ?? [] : []);
   const useCell = $derived(pos !== undefined && cell >= 0 && cell < forms.length);
@@ -42,13 +30,10 @@
 
 <div class="bar">
   <label for="concept">Concept</label>
-  <select id="concept" value={concept} onchange={(e) => onconcept(e.currentTarget.value)}>
-    {#each groups as [field, cs] (field)}
-      <optgroup label={field}>
-        {#each cs as c (c.id)}<option value={c.label}>{c.label}{c.core ? '' : ' ·'}</option>{/each}
-      </optgroup>
-    {/each}
-  </select>
+  <input id="concept" list="concept-list" value={concept} onchange={(e) => onconcept(e.currentTarget.value)} />
+  <datalist id="concept-list">
+    {#each concepts as c (c.id)}<option value={c.label}>{c.gloss}</option>{/each}
+  </datalist>
   {#if forms.length}
     <label for="form">Form</label>
     <select id="form" value={useCell ? cell : -1} onchange={(e) => oncell(+e.currentTarget.value)}>
