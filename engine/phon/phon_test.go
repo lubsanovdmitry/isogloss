@@ -121,6 +121,30 @@ func TestSyllabify(t *testing.T) {
 	}
 }
 
+// TestRepairSplitsMedialClusters: a medial cluster the template can split
+// between coda and onset is legal and left alone; one it cannot is repaired.
+func TestRepairSplitsMedialClusters(t *testing.T) {
+	cvc := &Phonotactics{Template: Template{MaxOnset: 1, MaxCoda: 1}}
+	ep := MustParseWord("i").Segs[0]
+	cases := map[string]string{
+		"naħnu":  "naħnu",  // ħ.n, not .ħn
+		"kuskus": "kuskus", // s.k, not .sk
+		"maktab": "maktab",
+		"ktub":   "kitub",   // an initial cluster has no coda to go to
+		"akstra": "aksitra", // three consonants cannot split over one coda and one onset
+	}
+	for in, want := range cases {
+		w := MustParseWord(in)
+		Repair(&w, cvc, RepairEpenthesis, ep)
+		if got := RenderWord(w); got != want {
+			t.Errorf("%s: got %s want %s", in, got, want)
+		}
+		if !Legal(&w, cvc) {
+			t.Errorf("%s: %s is still illegal", in, RenderWord(w))
+		}
+	}
+}
+
 func TestStress(t *testing.T) {
 	stress := func(s string, r StressRule) string {
 		w := MustParseWord(s)
@@ -162,6 +186,9 @@ func TestRomanize(t *testing.T) {
 		if got := Romanize(MustParseWord(in)); got != want {
 			t.Errorf("%s → %s, want %s", in, got, want)
 		}
+	}
+	if Capitalize("'insaan") != "Insaan" || Capitalize("'") != "'" {
+		t.Error("a leading apostrophe")
 	}
 	if Capitalize("ünal") != "Ünal" {
 		t.Error("capitalize")

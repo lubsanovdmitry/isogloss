@@ -61,8 +61,12 @@ func Romanize(w Word) string {
 	return b.String()
 }
 
-// Capitalize upper-cases the first letter.
+// Capitalize upper-cases the first letter of a name. A leading apostrophe
+// (a romanized ʔ or ʕ) is dropped, as English writes Ali, not 'Ali.
 func Capitalize(s string) string {
+	if t := strings.TrimLeft(s, "'"); t != "" {
+		s = t
+	}
 	for i, r := range s {
 		if unicode.IsLetter(r) {
 			return s[:i] + string(unicode.ToUpper(r)) + s[i+len(string(r)):]

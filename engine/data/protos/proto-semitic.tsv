@@ -1,0 +1,239 @@
+# Proto-Semitic, as reconstructed for roughly 4000 BCE.
+# Letters are given phonetic values after Huehnergard and Kogan:
+# *š = s, *ś = ɬ, *s = t͡s, *z = d͡z (the sibilants as affricates);
+# emphatics as ejectives: *ṭ = tʼ, *ḳ = kʼ, *ṣ = t͡sʼ, *ṣ́ = t͡ɬʼ, *ṯ̣ = θʼ;
+# *ṯ = θ, *ḏ = ð, *ḫ = x, *ġ = ɣ, *ḥ = ħ, *g = ɡ.
+# Nouns are stems without case ending or mimation (kalb for *kalbum);
+# verbs are suffix-conjugation stems (3rd masculine singular without -a).
+# Root-and-pattern morphology is not modelled: each word is a fixed stem.
+# Only concepts with a widely accepted reconstruction are listed
+# (Huehnergard 2011; Kogan 2011; Militarev & Kogan, SED); the rest are coined.
+@name	Proto-Semitic
+@summary	The reconstructed ancestor of Akkadian, Arabic, Hebrew, Aramaic and Ge'ez: three-consonant roots, ejective emphatics, a lateral fricative, three cases.
+@source	Huehnergard, Proto-Semitic Language and Culture (2011); Kogan, Proto-Semitic Lexicon (2011); Militarev & Kogan, Semitic Etymological Dictionary — simplified by hand
+@template	(C)V(C)(C)
+@stress	latin
+@epenthetic	i
+@order	VSO	prepositions	noun-genitive	noun-adjective	noun-demonstrative	noun-relative clause
+@slot	PL	affix	suffix	uː
+@slot	ACC	affix	suffix	a
+@slot	GEN	affix	suffix	i
+@slot	DAT	clitic	prefix	li
+@slot	LOC	periphrasis	prefix	in
+@slot	1SG	affix	suffix	ku
+@slot	2SG	affix	suffix	ta
+@slot	3SG	affix	suffix	a
+@slot	1PL	affix	suffix	nu
+@slot	2PL	affix	suffix	tunu
+@slot	3PL	affix	suffix	uː
+dust	ʕapar
+claw	θʼupr
+all	kull
+other	ʔaxir
+fire	ʔisaːt
+fish	nuːn
+left	ɬimaːl
+fat	samn
+dwell	=sit
+three	θalaːθ
+five	xamis
+wolf	ðiʔb
+come-back	θaːb
+grass	daθʔ
+horse	t͡suːt͡s
+iron	parzil
+ash	ʔipr
+river	nahar
+road	dark
+root	surs
+mouth	pam
+person	ʔinaːs
+from	min
+go	halak
+walk	=go
+seed	d͡zarʕ
+smoke	kʼutʼr
+snow	θalɡ
+they	sumuː
+slave	ʕabd
+priest	kaːhin
+stone	ʔabn
+tree	ʕit͡ɬʼ
+love	ʔahab
+barley	ɬaʕirat
+war	kʼarab
+blood	dam
+water	maj
+wind	ruːħ
+woman	ʔanθat
+wife	=woman
+husband	baʕl
+put	ɬaːm
+right	jamin
+good	tʼaːb
+cow	=ox
+wheat	ħintʼat
+ox	ʔalp
+big	rabb
+long	ʔarik
+tongue	lisaːn
+i	ʔanaːku
+heavy	kabid
+he	suːʔa
+we	naħnu
+you	ʔantunu
+this	ðuː
+thou	ʔanta
+mother	ʔimm
+father	ʔab
+rope	ħabl
+worm	tawlaʕ
+tail	ðanab
+nose	ʔanp
+heart	libb
+liver	kabid
+day	jawm
+year	sanat
+earth	ʔart͡ɬʼ
+new	ħadaθ
+night	lajl
+who	man
+what	maː
+where	ʔajna
+when	mataj
+not	laː
+no	=not
+wide	raħab
+ear	ʔuðn
+eye	ʕajn
+belly	batʼn
+house	bajt
+rain	matʼar
+head	raʔs
+wing	kanap
+brother	ʔax
+sister	ʔaxaːt
+salt	milħ
+hand	jad
+vomit	kʼaːʔ
+fall	napal
+back	θʼahr
+foot	riɡl
+leg	=foot
+child	walad
+moon	warx
+sheep	ɬaj
+white	laban
+eat	ʔakal
+pig	xind͡ziːr
+with	ʕim
+sun	ɬams
+laugh	t͡ɬʼaħak
+daughter	bint
+bread	laħm
+gold	ðahab
+knee	birk
+tooth	sinn
+town	kʼarjat
+city	=town
+louse	kʼaml
+horn	kʼarn
+bone	ʕaθʼm
+dry	jabis
+drink	satij
+breast	θadj
+bite	nasak
+straight	jasar
+correct	=straight
+name	sim
+far	raħikʼ
+hear	samiʕ
+see	raʔaj
+know	wadaʕ
+lie	sakab
+sit	waθab
+kill	kʼatal
+dig	ħapar
+fear	jariʔ
+count	manaj
+suck	janakʼ
+be-alive	ħajij
+yellow	warkʼ
+green	=yellow
+burning	ɬarap
+full	maliʔ
+star	kawkab
+cut	karat
+hit	maxat͡sʼ
+hunt	t͡sʼaːd
+split	bakʼaʕ
+swim	ɬaħaj
+fly	ʕaːp
+stand	kʼaːm
+turn-around	hapak
+come	baːʔ
+give	natan
+hold	ʔaxað
+pull	masak
+throw	ramaj
+wash	raħat͡sʼ
+say	ʔamar
+if	ʔim
+in	bi
+sea	jamm
+keep	naθʼar
+below	taħt
+cloud	ʕanan
+one	ʔaħad
+die	maːt
+two	θinaː
+four	ʔarbaʕ
+goat	ʕind͡z
+king	malk
+wine	wajn
+sword	ħarb
+face	pan
+sell	makar
+flow	d͡zaːb
+and	wa
+be	kaːn
+sleep	jasan
+inside	kʼirb
+guts	=inside
+son	bin
+short	kʼat͡sʼir
+after	ʔaxar
+behind	=after
+sky	samaj
+above	ʕal
+take	lakʼaħ
+finish	kalaj
+look	nabatʼ
+bear	dubb
+copper	nuħaːs
+bronze	=copper
+ship	ʔunijj
+boat	=ship
+tie	rakat͡s
+plough	ħaraθ
+there	θamma
+near	kʼarib
+god	ʔil
+self	naps
+same	=self
+dog	kalb
+male-person	ðakar
+warm	ħamm
+front	kʼudm
+thin	dakʼkʼ
+cold	kʼarr
+do	paʕal
+skin	ɡild
+flesh	baɬar
+towards	ʔilaj
+for	li
+silver	kat͡sp
+milk	ħalab
+hair	ɬaʕr
+blow	napax
+send	salaħ

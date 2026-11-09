@@ -1,0 +1,39 @@
+name: Out of Arabia
+summary: >-
+  Arabic-speaking tribes from the desert, united under one ruler with a
+  written scripture, conquer the farming lands around them within a few
+  generations. Classical Arabic stays the written standard throughout.
+watch: >-
+  Arabic replacing the conquered languages or settling beside them, the
+  words and sounds the farmers leave in their Arabic, and spoken dialects
+  drifting away from a written standard that does not change: diglossia.
+ticks: 56
+families:
+  - name: farmers
+    place: fertile
+    radius: 4
+  - name: hill people
+    place: mountain|west
+    radius: 2
+  - name: Arabs
+    place: desert|south
+    radius: 1
+    language: arabic
+polities:
+  - capital: family 3
+    covers: 1
+    script: alphabet
+    standard: true
+events:
+  - year: 50
+    do: conquer
+    polity: 0
+    place: fertile
+  - year: 100
+    do: conquer
+    polity: 0
+    place: centre
+  - year: 150
+    do: conquer
+    polity: 0
+    place: mountain|west

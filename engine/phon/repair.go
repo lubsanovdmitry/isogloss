@@ -29,6 +29,12 @@ func violation(w *Word, p *Phonotactics) (byte, int) {
 	if !hasV && len(w.Segs) > 0 {
 		return 'v', 0
 	}
+	// A word that syllabifies within the template is legal, even where the
+	// permissive pass below would make a medial cluster one long onset
+	// (naħnu is naħ.nu under (C)V(C), not na.ħnu).
+	if fits(w, p) {
+		return 0, 0
+	}
 	Resyllabify(w, &DefaultPhonotactics)
 	for k, s := range w.Syll {
 		if s.Nucleus-s.Start > p.Template.MaxOnset {
@@ -44,6 +50,18 @@ func violation(w *Word, p *Phonotactics) (byte, int) {
 		}
 	}
 	return 0, 0
+}
+
+// fits reports whether w, syllabified under p, has every onset and coda
+// within p's template (it resyllabifies w).
+func fits(w *Word, p *Phonotactics) bool {
+	Resyllabify(w, p)
+	for _, s := range w.Syll {
+		if s.End-s.Nucleus-1 > p.Template.MaxCoda || !p.validOnset(w.Segs[s.Start:s.Nucleus]) {
+			return false
+		}
+	}
+	return true
 }
 
 // Legal reports whether w satisfies p (it resyllabifies w).

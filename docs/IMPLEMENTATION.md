@@ -480,9 +480,7 @@ by use, so roots coined for the concepts the table leaves out (2 for Latin,
 they are marked (`Proto.Coined`; "(coined)" in Word history). Cultural
 items the table leaves out are unknown, as in generated languages. A UI
 choice is applied to the scenario's source (`scenario.WithLanguage`), so
-saves replay it. A test checks every listed form fits its own template:
-the engine's repair syllabifies medial s+stop as an onset, so PAN
-*kuSkuS and *sepsep were left out rather than "repaired" on first change.
+saves replay it. A test checks every listed form fits its own template.
 
 Simplifications: Latin and PIE fuse number and case; the engine has one
 exponent per slot, so endings are one representative each (Latin PL -s,
@@ -495,3 +493,31 @@ Four new starters use them: Latin after the empire (empire collapse in
 year 400), Out of the steppe (PIE herders over farmers), Out of Taiwan
 (PAN across an archipelago) and Germanic and Latin (two real families, a
 frontier crossing in 350 and a fall in 450).
+
+## Arabic and Proto-Semitic (2026-11-10)
+
+Two more tables: Classical Arabic (attested, unstarred) and Proto-Semitic.
+Arabic nouns are pausal forms without case vowel or nunation (kalb, bajt,
+madiːna), the forms the dialects continue; verbs are perfect stems (katab),
+with the perfect endings as agreement (-tu -ta -a -naː -tum -uː). Slots:
+plural -aːt (the sound feminine plural; broken plurals are not modelled),
+ACC -a, GEN -i, DAT li-, LOC by periphrasis on fiː, the article al- as a
+DEF clitic, FUT sa-, PRF qad. Proto-Semitic gives Huehnergard's and
+Kogan's phonetic values: *š = s, *ś = ɬ, *s = t͡s, *z = d͡z, emphatics as
+ejectives (tʼ kʼ t͡sʼ t͡ɬʼ θʼ); suffix-conjugation endings -ku -ta -a -nu
+-tunu -uː; ~100 concepts coined. Root-and-pattern morphology is not
+modelled: each word is a fixed stem, so Arabic kataba and kitaːb are
+unrelated words to the engine. Both use the weight-sensitive Latin stress
+rule, close to Classical Arabic's except on final superheavy syllables.
+
+Repair fix: `phon.violation` syllabified permissively before checking the
+template, so a medial cluster with rising sonority became one onset and
+broke (C)V(C): naħnu was na.ħnu and was "repaired" to naħinu on the first
+sound change. A word that syllabifies within its template under the
+language's own phonotactics is now legal; otherwise the old permissive
+pass picks the violation as before, so no word that was legal becomes
+illegal. PAN *kuSkuS and *sepsep, left out earlier for this reason, are
+back. Names drop a leading apostrophe (a romanized ʔ or ʕ): Insaan, not
+'Insaan. New starter: Out of Arabia (Arabic tribes conquer the farmers
+and hill people around them in years 50–150; Classical Arabic stays the
+written standard).
