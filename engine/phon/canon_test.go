@@ -67,3 +67,11 @@ func mustSeg(t *testing.T, ipa string) FeatureSet {
 	}
 	return s[0].F
 }
+
+func TestDoublyArticulatedFricative(t *testing.T) {
+	g := mustSeg(t, "ɡ͡b")
+	f := g.Set(Continuant, true).Set(DelayedRelease, true) // spirantized ɡ͡b
+	if got := RenderFeatures(f); got != "ɣ͡β" {
+		t.Errorf("spirantized ɡ͡b renders as %s, want ɣ͡β", got)
+	}
+}

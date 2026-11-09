@@ -189,10 +189,10 @@ func (s FeatureSet) String() string {
 // conventions) to a bundle a sound change produced, so that a change never
 // leaves a combination no symbol can show: an unrounded vowel is not
 // labial, a labial vowel is rounded, non-low vowels are tense except the
-// mid central one, a vowel is not both front and back (fronting wins),
-// ejectives are voiceless, implosives are voiced stops, and a placeless
-// fricative (h, ɦ) is a non-consonantal glide with spread glottis, and a
-// glottal stop is voiceless. Bundles in the table are returned
+// mid central one, a vowel is not both front and back (fronting wins), a
+// labialized consonant leaves labiodentality unspecified, ejectives are voiceless, implosives are voiced stops, and a placeless
+// fricative (h, ɦ) is a non-consonantal glide with spread glottis (or,
+// glottalized, voiceless hˀ), and a glottal stop is voiceless. Bundles in the table are returned
 // unchanged.
 func Canon(f FeatureSet) FeatureSet {
 	if _, ok := tbl().byFeat[f]; ok {
@@ -222,6 +222,9 @@ func Canon(f FeatureSet) FeatureSet {
 		}
 		return f
 	}
+	if f.Has(Consonantal) && f.Has(Round) {
+		f = f.Unset(Labiodental) // labialized (kʷ, ɣʷ): never labiodental
+	}
 	if f.Has(Ejective) {
 		f = f.Set(Voice, false)
 	}
@@ -237,6 +240,8 @@ func Canon(f FeatureSet) FeatureSet {
 			f = f.Set(Consonantal, false)
 			if !f.Has(ConstrictedGlottis) {
 				f = f.Set(SpreadGlottis, true)
+			} else {
+				f = f.Set(Voice, false) // hˀ
 			}
 		} else if f.Has(ConstrictedGlottis) {
 			f = f.Set(Voice, false)

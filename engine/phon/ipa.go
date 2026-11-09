@@ -186,6 +186,10 @@ func RenderFeatures(f FeatureSet) string {
 		t.cache.Store(f, out)
 		return out
 	}
+	if out, ok := t.doubly(f); ok {
+		t.cache.Store(f, out)
+		return out
+	}
 	best, bestD := 0, 1<<30
 	for i, s := range t.symbols {
 		d := Distance(s.F, f)
@@ -252,6 +256,26 @@ func (t *ipaTable) exact(f FeatureSet) (string, bool) {
 		dfs(s.F, s.IPA, utf8.RuneCountInString(s.IPA), 0, 0)
 	}
 	return best, bestN < 1<<30
+}
+
+// doubly spells a labial-velar consonant with no symbol of its own (a
+// spirantized ɡ͡b) as its velar and labial halves joined by a tie bar
+// (ɣ͡β), when each half has an exact spelling.
+func (t *ipaTable) doubly(f FeatureSet) (string, bool) {
+	if f.Has(Syllabic) || !f.Has(Labial) || !f.Has(Dorsal) || f.Has(Round) {
+		return "", false
+	}
+	velar := f.Set(Labial, false).Unset(Round).Unset(Labiodental)
+	labial := f.Set(Dorsal, false).Unset(High).Unset(Low).Unset(Front).Unset(Back).Set(Round, false).Set(Labiodental, false)
+	v, ok := t.exact(velar)
+	if !ok {
+		return "", false
+	}
+	l, ok := t.exact(labial)
+	if !ok {
+		return "", false
+	}
+	return v + string(tieBar) + l, true
 }
 
 // Render renders one segment, with its tone mark.

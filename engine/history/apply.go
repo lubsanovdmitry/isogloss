@@ -279,7 +279,7 @@ func applyGram(nv *lex.Variety, g *GramChange, tick int32) {
 }
 
 // checkLoss marks bound exponents that sound change has worn away: when at
-// least three quarters of the cells with the slot sound the same as their
+// least two thirds of the cells with the slot sound the same as their
 // partner cells without it, the distinction is lost.
 func checkLoss(nv *lex.Variety, tick int32) {
 	for s := morph.Slot(0); s < morph.NumSlots; s++ {
@@ -302,7 +302,7 @@ func checkLoss(nv *lex.Variety, tick int32) {
 				}
 			}
 		}
-		if total > 0 && same*4 >= total*3 {
+		if total > 0 && same*3 >= total*2 {
 			e.Stage, e.Since = morph.Lost, tick
 		}
 	}

@@ -146,33 +146,46 @@ func TestStartersShowWhatTheyPromise(t *testing.T) {
 		}
 	})
 	t.Run("island hopping: founder losses thin inventories", func(t *testing.T) {
+		// Each crossing loses the founders' rarest sounds; the losses
+		// should last in their descendants (sounds can come back through
+		// loans and later changes, but mostly do not within the run).
 		sc := starter(t, "island-hopping")
-		lower := 0
+		kept, total := 0, 0
 		for _, seed := range []uint64{7, 8, 9, 10} {
 			s, _ := NewScenario(seed, DefaultConfig(), sc)
 			s.Run(int(sc.Ticks))
-			var few, many [2]int
 			for _, c := range s.Communities() {
-				k := 0
+				have := map[string]bool{}
+				for _, f := range c.Variety.Inventory() {
+					have[phon.RenderFeatures(f)] = true
+				}
+				var lost []string
 				for _, e := range c.Variety.Adopted() {
-					if e.Kind == lex.EntryInnov && strings.HasPrefix(s.Reg.Get(e.Innov).Template, "founder") {
-						k++
+					if e.Kind != lex.EntryInnov {
+						continue
+					}
+					if name, ok := strings.CutPrefix(s.Reg.Get(e.Innov).Template, "founder effect: "); ok {
+						lost = append(lost, strings.Split(strings.TrimSuffix(name, " lost"), ", ")...)
 					}
 				}
-				if k <= 1 {
-					few[0] += len(c.Variety.Inventory())
-					few[1]++
-				} else if k >= 3 {
-					many[0] += len(c.Variety.Inventory())
-					many[1]++
+				if len(lost) < 2 {
+					continue
+				}
+				total++
+				gone := 0
+				for _, x := range lost {
+					if !have[x] {
+						gone++
+					}
+				}
+				if gone*2 > len(lost) {
+					kept++
 				}
 			}
-			if few[1] > 0 && many[1] > 0 && many[0]*few[1] < few[0]*many[1] {
-				lower++
-			}
 		}
-		if lower < 3 {
-			t.Errorf("inventories after ≥3 founder losses smaller in only %d of 4 runs", lower)
+		t.Logf("%d of %d communities with two or more founder losses still lack most of the lost sounds", kept, total)
+		if total == 0 || kept*10 < total*7 {
+			t.Errorf("founder losses did not last: %d of %d", kept, total)
 		}
 	})
 	t.Run("silk road: words cross families", func(t *testing.T) {

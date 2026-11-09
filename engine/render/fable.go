@@ -142,15 +142,17 @@ func (r *renderer) np(n *NP, cas morph.Slot) []Word {
 	f := r.v.CellForm(c, morph.Noun, k)
 	cell := morph.Cells(morph.Noun)[k]
 	if defOutside {
+		// Definite and oblique: the article sits inside the case marker
+		// (Romanian om-ul-ui, Albanian burr-i-t): start from the stored
+		// definite form and add the case's own material outside it.
 		dk := morph.CellIndex(morph.Noun, morph.DEF)
 		if n.PL {
 			dk = morph.CellIndex(morph.Noun, morph.PL, morph.DEF)
 		}
-		if pre, suf, ok := r.v.Productive(morph.Noun, dk); ok {
-			// Only the article's own material: drop a plural marker from the pattern.
-			pre, suf = onlySlot(pre, morph.DEF), onlySlot(suf, morph.DEF)
-			f = r.v.Finish(morph.Join(pre, f, suf))
-			cell = morph.Cell{Slots: append(append([]morph.Slot(nil), cell.Slots...), morph.DEF)}
+		if pre, suf, ok := r.v.Productive(morph.Noun, k); ok {
+			pre, suf = onlySlot(pre, cas), onlySlot(suf, cas)
+			f = r.v.Finish(morph.Join(pre, r.v.CellForm(c, morph.Noun, dk), suf))
+			cell = morph.Cell{Slots: append(append([]morph.Slot(nil), morph.Cells(morph.Noun)[dk].Slots...), cas)}
 		}
 	}
 	form, gloss := Gloss(f, glossOf(n.Noun), cell, m)
@@ -203,18 +205,17 @@ func (r *renderer) verb(c Clause) []Word {
 			aux = append(aux, r.freeMarker(c.TAM))
 		}
 	}
-	person := c.Person
-	if c.TAM != present && c.TAM != morph.PST {
-		person = morph.P3SG // only 3SG cells exist for FUT, PRF, PROG
+	var v Word
+	if src, ok := r.auxVerb(c.TAM); ok {
+		// A periphrastic tense built on a verb ('go', 'have', 'sit'): the
+		// auxiliary agrees with the subject, the main verb stays plain.
+		ak := morph.CellIndex(morph.Verb, c.Person)
+		form, gloss := Gloss(r.v.CellForm(src, morph.Verb, ak), c.TAM.String(), morph.Cells(morph.Verb)[ak], m)
+		aux = []Word{{form, gloss}}
+		v = r.bare(c.Verb)
+	} else {
+		v = r.finite(c, slots)
 	}
-	slots = append(slots, person)
-	k := morph.CellIndex(morph.Verb, slots...)
-	if k < 0 {
-		k = morph.BaseCell(morph.Verb)
-	}
-	f := r.v.CellForm(concept(c.Verb), morph.Verb, k)
-	form, gloss := Gloss(f, c.Verb, morph.Cells(morph.Verb)[k], m)
-	v := Word{form, gloss}
 	if len(aux) == 0 {
 		return []Word{v}
 	}
@@ -222,6 +223,83 @@ func (r *renderer) verb(c Clause) []Word {
 		return append([]Word{v}, aux...)
 	}
 	return append(aux, v)
+}
+
+// auxVerb reports whether a tense is expressed by a separate verb (its
+// source concept), which then carries agreement.
+func (r *renderer) auxVerb(tam morph.Slot) (lex.ConceptID, bool) {
+	if tam == present {
+		return 0, false
+	}
+	e := r.v.M.Exp[tam]
+	if !e.Stage.Free() || e.Source < 0 {
+		return 0, false
+	}
+	if p, ok := lex.POSOf(lex.ConceptID(e.Source)); !ok || p != morph.Verb {
+		return 0, false
+	}
+	return lex.ConceptID(e.Source), true
+}
+
+// finite renders the main verb with its bound tense and agreement. Only
+// the 3rd singular is stored for the future, perfect and progressive; other
+// persons swap its agreement for the person's own, as this verb's present
+// tense shows it.
+func (r *renderer) finite(c Clause, slots []morph.Slot) Word {
+	m := &r.v.M
+	verb := concept(c.Verb)
+	k := morph.CellIndex(morph.Verb, append(slots, c.Person)...)
+	if k >= 0 {
+		f := r.v.CellForm(verb, morph.Verb, k)
+		form, gloss := Gloss(f, c.Verb, morph.Cells(morph.Verb)[k], m)
+		return Word{form, gloss}
+	}
+	k = morph.CellIndex(morph.Verb, append(slots, morph.P3SG)...)
+	if k < 0 {
+		k = morph.BaseCell(morph.Verb)
+	}
+	f := withoutSlot(r.v.CellForm(verb, morph.Verb, k), morph.P3SG)
+	if pre, suf, ok := r.v.Productive(morph.Verb, morph.CellIndex(morph.Verb, c.Person)); ok {
+		f = r.v.Finish(morph.Join(onlySlot(pre, c.Person), f, onlySlot(suf, c.Person)))
+	}
+	cell := morph.Cell{Slots: append(append([]morph.Slot(nil), slots...), c.Person)}
+	form, gloss := Gloss(f, c.Verb, cell, m)
+	return Word{form, gloss}
+}
+
+// withoutSlot cuts slot s's material out of a form (nothing if the slot
+// has no material of its own).
+func withoutSlot(w phon.Word, s morph.Slot) phon.Word {
+	for i, b := range w.Bounds {
+		sl, _, ok := morph.SlotOfTag(b.Tag)
+		if !ok || sl != s {
+			continue
+		}
+		lo, hi := b.At, len(w.Segs)
+		if i+1 < len(w.Bounds) {
+			hi = w.Bounds[i+1].At
+		}
+		if b.Tag&phon.TagPrefix != 0 {
+			lo, hi = 0, b.At
+			if i > 0 {
+				lo = w.Bounds[i-1].At
+			}
+		}
+		out := phon.Word{Segs: append(append([]phon.Segment(nil), w.Segs[:lo]...), w.Segs[hi:]...)}
+		for j, x := range w.Bounds {
+			if j == i {
+				continue
+			}
+			if x.At >= hi {
+				x.At -= hi - lo
+			}
+			if x.At > 0 && x.At < len(out.Segs) {
+				out.Bounds = append(out.Bounds, x)
+			}
+		}
+		return out
+	}
+	return w
 }
 
 // Render renders a clause in a variety.

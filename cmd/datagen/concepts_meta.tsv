@@ -128,3 +128,118 @@ ROTTEN	4	4	0
 FOG	4	4	0
 YES	1	4	0
 NO	1	4	0
+# The rest of the Swadesh-207 list. stab 2: on the Leipzig-Jakarta list
+# (Tadmor 2009, the 100 meanings most resistant to borrowing and
+# replacement); 3: the rest of Swadesh-100; 4: Swadesh-200 items that real
+# lists show replaced often (dimensions, secondary colours, weather and
+# manner verbs, spouses). freq follows everyday corpus frequency.
+ASH	3	2	0
+BACK	2	2	0
+BIRD	2	2	0
+BITE	3	2	0
+BLACK	2	2	0
+BLOW (OF WIND)	3	2	0
+BREAST	3	2	0
+BURNING	2	2	0
+DOG	2	2	0
+EGG	2	2	0
+FALL	2	2	0
+FAR	2	2	0
+FISH	2	2	0
+FLESH OR MEAT	2	2	0
+FLY (MOVE THROUGH AIR)	2	2	0
+HAIR	2	2	0
+HEAVY	2	2	0
+HIT	2	2	0
+HORN (ANATOMY)	4	2	0
+LAUGH	2	2	0
+LEAF	3	2	0
+LEG	2	2	0
+LIVER	4	2	0
+NECK	3	2	0
+RAIN (RAINING)	2	2	0
+RED	2	2	0
+ROOT	3	2	0
+ROPE	3	2	0
+SALT	3	2	0
+SAND	3	2	0
+SKIN (HUMAN)	3	2	0
+SMOKE (EXHAUST)	3	2	0
+SUCK	4	2	0
+TAIL	3	2	0
+THICK	3	2	0
+TIE	3	2	0
+WIDE	3	2	0
+WIND	2	2	0
+WING	3	2	0
+BARK	4	3	0
+BE ALIVE	2	3	0
+BELLY	3	3	0
+BREATHE	3	3	0
+CLAW	4	3	0
+CLOUD	3	3	0
+COLD (OF WEATHER)	2	3	0
+CUT	2	3	0
+DIG	3	3	0
+DRY	3	3	0
+FAT (ORGANIC SUBSTANCE)	3	3	0
+FEATHER	4	3	0
+FLOW	3	3	0
+FREEZE	4	3	0
+GRASS	3	3	0
+GREEN	3	3	0
+ICE	3	3	0
+MOUNTAIN	2	3	0
+NEAR	2	3	0
+RIVER	2	3	0
+ROAD	2	3	0
+SEA	2	3	0
+SEED	3	3	0
+SEW	4	3	0
+SING	2	3	0
+SKY	2	3	0
+SLEEP	2	3	0
+SNOW	3	3	0
+SPIT	4	3	0
+SWIM	3	3	0
+TREE	2	3	0
+VOMIT	4	3	0
+WALK	2	3	0
+WARM (OF WEATHER)	2	3	0
+WASH	2	3	0
+WET	3	3	0
+WHITE	2	3	0
+WORM	3	3	0
+YEAR	2	3	0
+ANIMAL	3	4	0
+BERRY	4	4	0
+COUNT	3	4	0
+DUST	3	4	0
+FEAR (BE AFRAID)	2	4	0
+FIGHT	2	4	0
+FLOAT	4	4	0
+FLOWER	3	4	0
+FOREST	3	4	0
+HUNT	3	4	0
+HUSBAND	2	4	0
+LAKE	3	4	0
+NARROW	3	4	0
+ROUND	3	4	0
+SHARP	3	4	0
+SHORT	2	4	0
+SMELL (PERCEIVE)	3	4	0
+SPLIT	4	4	0
+STRAIGHT	3	4	0
+SWELL	4	4	0
+THIN	3	4	0
+WIFE	2	4	0
+YELLOW	3	4	0
+# Kin terms and body words among the grammaticalization sources.
+BROTHER	2	2	0
+SISTER	2	2	0
+SON	2	2	0
+DAUGHTER	2	3	0
+BODY	2	3	0
+FACE	2	3	0
+YESTERDAY	3	2	0
+TOMORROW	3	3	0

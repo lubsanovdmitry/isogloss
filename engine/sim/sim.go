@@ -74,7 +74,7 @@ func DefaultConfig() Config {
 	return Config{
 		World:          world.DefaultConfig,
 		SoundRate:      60,
-		LexRate:        520,
+		LexRate:        450,
 		Candidates:     4,
 		ClusterEvery:   4,
 		SmallBias:      500,

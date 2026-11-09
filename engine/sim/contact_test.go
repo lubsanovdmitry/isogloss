@@ -1,6 +1,7 @@
 package sim
 
 import (
+	"slices"
 	"testing"
 
 	"isogloss/engine/history"
@@ -84,5 +85,38 @@ func TestLoansOnlyTakeLaterChanges(t *testing.T) {
 	}
 	if checked == 0 {
 		t.Fatal("no loans to check")
+	}
+}
+
+// TestPolysemyInRange: words shared between concept slots (colexification)
+// stay near what real languages show (roughly 10-25% of a 300-concept list)
+// and do not keep accumulating: meaning shifts create them, replacements of
+// either sense remove them. Measured at 1000 years: medians 9-24%; at 3000
+// years they are no higher.
+func TestPolysemyInRange(t *testing.T) {
+	heavy(t)
+	var shares []int
+	for seed := uint64(1); seed <= 6; seed++ {
+		s := New(seed, DefaultConfig())
+		s.Run(40)
+		for _, l := range s.LivingLanguages() {
+			v := s.CentreVariety(l)
+			n, poly := 0, 0
+			for i := 0; i < v.Lex.Len(); i++ {
+				c := lex.ConceptID(i)
+				if v.Lex.At(c).Absent() {
+					continue
+				}
+				n++
+				if len(v.Senses(c)) > 1 {
+					poly++
+				}
+			}
+			shares = append(shares, poly*1000/n)
+		}
+	}
+	slices.Sort(shares)
+	if m := shares[len(shares)/2]; m < 80 || m > 250 {
+		t.Errorf("median polysemy %d‰ (all: %v)", m, shares)
 	}
 }

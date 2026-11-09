@@ -7,6 +7,7 @@ import (
 	"isogloss/engine/history"
 	"isogloss/engine/lex"
 	"isogloss/engine/phon"
+	"isogloss/engine/pop"
 )
 
 // nameSources are concepts whose word may name a language, in order of preference.
@@ -86,9 +87,10 @@ func (s *Sim) cluster() {
 		}
 	}
 	alive := map[int32]bool{}
+	size := s.politySizes()
 	for gi, g := range groups {
 		l := s.Langs[groupLang[gi]]
-		l.Centre, l.Members, l.Continuum = g.Centre, g.Members, g.Continuum
+		l.Centre, l.Members, l.Continuum = s.referenceHex(g, size), g.Members, g.Continuum
 		alive[l.ID] = true
 		for _, h := range g.Members {
 			s.ByHex[h].Lang = l.ID
@@ -197,6 +199,36 @@ func (s *Sim) LivingLanguages() []*Language {
 		}
 	}
 	return out
+}
+
+// referenceHex is where a language is recorded (its word lists, its place
+// in the tree): the capital of the largest standing polity whose capital
+// speaks it, as a standard language is the speech of its capital; else the
+// group's central community.
+func (s *Sim) referenceHex(g pop.Group, size []int) int32 {
+	best, bestN := g.Centre, 0
+	for _, h := range g.Members {
+		c := s.ByHex[h]
+		if c.Polity < 0 {
+			continue
+		}
+		p := s.Polities[c.Polity]
+		if p.Alive() && p.Capital == h && size[p.ID] > bestN {
+			best, bestN = h, size[p.ID]
+		}
+	}
+	return best
+}
+
+// politySizes counts each polity's communities.
+func (s *Sim) politySizes() []int {
+	n := make([]int, len(s.Polities))
+	for _, c := range s.ByHex {
+		if c != nil && c.Polity >= 0 {
+			n[c.Polity]++
+		}
+	}
+	return n
 }
 
 // CentreVariety returns the variety at a language's centre.

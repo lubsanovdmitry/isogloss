@@ -2,6 +2,7 @@ package sim
 
 import (
 	"slices"
+	"strings"
 
 	"isogloss/engine/contact"
 	"isogloss/engine/fx"
@@ -32,6 +33,12 @@ const (
 	// keepPermille: chance that a loan over a strong contact keeps its
 	// foreign sounds.
 	keepPermille = 200
+	// courtLoanPermille: chance per tick that a capital borrows a word
+	// from a more prestigious foreign capital within courtReach hexes or
+	// at the other end of one of its trade routes (×0.3 from a less
+	// prestigious one).
+	courtLoanPermille = 1000
+	courtReach        = 10
 )
 
 // placeFreq is the frequency class place names change at.
@@ -227,6 +234,44 @@ func (s *Sim) proposeContact(r *rng.Stream, c *pop.Community) {
 		}
 		d := s.ByHex[k.To]
 		if con, ok := s.pickLoan(r, v, d.Variety); ok {
+			if lc, kind := s.takeWord(r, c, d, con, false); lc != nil {
+				s.newInnov(r, &history.Innovation{Kind: kind, Lex: lc, Stress: -1}, c.Hex)
+			}
+		}
+	}
+	s.courtLoans(r, c)
+}
+
+// courtLoans: a standing polity's capital borrows from the capitals of
+// foreign polities near it or along its trade routes. Capitals take words
+// from abroad rather than from their own periphery, and a loan taken at
+// the capital spreads from the most prestigious place in the realm (and
+// with a written standard, top-down), so it reaches the language's centre
+// instead of stalling at a border.
+func (s *Sim) courtLoans(r *rng.Stream, c *pop.Community) {
+	p := s.polityOf(c)
+	if p == nil || p.Capital != c.Hex || c.Lang < 0 {
+		return
+	}
+	for _, q := range s.Polities {
+		if !q.Alive() || q.ID == p.ID {
+			continue
+		}
+		d := s.ByHex[q.Capital]
+		if d == nil || d.Lang < 0 || d.Lang == c.Lang {
+			continue
+		}
+		if s.World.Distance(c.Hex, q.Capital) > courtReach && !slices.Contains(s.routeLinks[c.Hex], q.Capital) {
+			continue
+		}
+		pm := uint64(courtLoanPermille) * uint64(s.Cfg.LoanRate) / 1000
+		if s.prestige[q.Capital] <= s.prestige[c.Hex] {
+			pm = pm * 3 / 10
+		}
+		if !r.Permille(uint32(pm)) {
+			continue
+		}
+		if con, ok := s.pickLoan(r, c.Variety, d.Variety); ok {
 			if lc, kind := s.takeWord(r, c, d, con, false); lc != nil {
 				s.newInnov(r, &history.Innovation{Kind: kind, Lex: lc, Stress: -1}, c.Hex)
 			}
@@ -428,8 +473,9 @@ func substrateMerger(r *rng.Stream, v *lex.Variety, sb *contact.Substrate) *hist
 // one of its rarer sounds (serial founder effects thin inventories).
 const founderPermille = 1000
 
-// founderEffect: a founding group may lose its rarest sound, merging it
-// into the nearest other phoneme.
+// founderEffect: a founding group loses its rarest sound, merging it into
+// the nearest other phoneme, and half the time its next rarest too (a small
+// group carries few of the words a rare sound occurs in).
 func (s *Sim) founderEffect(c *pop.Community) {
 	if c == nil {
 		return
@@ -446,29 +492,54 @@ func (s *Sim) founderEffect(c *pop.Community) {
 			count[sg.F]++
 		}
 	}
-	rarest, n := phon.FeatureSet{}, 1<<30
+	type sound struct {
+		f phon.FeatureSet
+		n int
+	}
+	var rare []sound
 	for _, f := range inv {
-		if count[f] > 0 && count[f] < n {
-			rarest, n = f, count[f]
+		if count[f] > 0 {
+			rare = append(rare, sound{f, count[f]})
 		}
 	}
-	var others []phon.FeatureSet
-	for _, f := range inv {
-		if f != rarest && f.Has(phon.Syllabic) == rarest.Has(phon.Syllabic) {
-			others = append(others, f)
-		}
+	slices.SortStableFunc(rare, func(a, b sound) int { return a.n - b.n })
+	losses := 1
+	if r.Permille(500) {
+		losses = 2
 	}
-	if n == 1<<30 || len(others) < 2 {
+	var lost []phon.FeatureSet
+	var src strings.Builder
+	src.WriteString("rule founder-loss:\n")
+	for _, x := range rare {
+		if len(lost) == losses {
+			break
+		}
+		var others []phon.FeatureSet
+		for _, f := range inv {
+			if f != x.f && !slices.Contains(lost, f) && f.Has(phon.Syllabic) == x.f.Has(phon.Syllabic) {
+				others = append(others, f)
+			}
+		}
+		if len(others) < 2 {
+			continue
+		}
+		y := contact.Nearest(x.f, others)
+		src.WriteString("    " + phon.Spell(x.f) + " => " + phon.Spell(y) + "\n")
+		lost = append(lost, x.f)
+	}
+	if len(lost) == 0 {
 		return
 	}
-	y := contact.Nearest(rarest, others)
-	src := "rule founder-loss:\n    " + phon.Spell(rarest) + " => " + phon.Spell(y) + "\n"
-	rule, err := tmpl.Compile(src)
+	rule, err := tmpl.Compile(src.String())
 	if err != nil {
 		return
 	}
-	s.newInnov(r, &history.Innovation{Kind: history.Sound, Template: "founder effect: " + phon.RenderFeatures(rarest) + " lost", Family: "merger",
-		Src: src, Rule: rule, Stress: -1}, c.Hex)
+	names := make([]string, len(lost))
+	for i, f := range lost {
+		names[i] = phon.RenderFeatures(f)
+	}
+	s.newInnov(r, &history.Innovation{Kind: history.Sound, Template: "founder effect: " + strings.Join(names, ", ") + " lost", Family: "merger",
+		Src: src.String(), Rule: rule, Stress: -1}, c.Hex)
 	l := s.live[len(s.live)-1]
 	l.wave.Level[c.Hex] = fx.One // the founders never had the sound,
 	l.in.Life = 0                // and nobody else loses it: only their descendants
