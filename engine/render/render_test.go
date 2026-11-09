@@ -183,3 +183,59 @@ func TestSuggestions(t *testing.T) {
 		t.Error("suggesting changed the run")
 	}
 }
+
+// TestDialectViews: the word map accounts for every community that has the
+// word, and a language's dialect table counts its communities.
+func TestDialectViews(t *testing.T) {
+	s := sim.New(42, sim.DefaultConfig())
+	s.Run(30)
+	water, _ := lex.ConceptByLabel("water")
+	var m struct {
+		Variants []struct {
+			Form  string
+			Root  int
+			Count int
+		}
+		Hex []int
+	}
+	b := DialectMapJSON(s, water)
+	valid(t, "dialectmap", b)
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatal(err)
+	}
+	total, mapped := 0, 0
+	for _, v := range m.Variants {
+		total += v.Count
+	}
+	for _, x := range m.Hex {
+		if x >= 0 {
+			mapped++
+		}
+	}
+	if total != mapped || total != len(s.Communities()) || len(m.Variants) < 2 {
+		t.Errorf("%d variants over %d communities, %d mapped, %d settled", len(m.Variants), total, mapped, len(s.Communities()))
+	}
+	l := s.LivingLanguages()[0]
+	var d struct {
+		Communities int
+		Rows        []struct {
+			Concept, Ref string
+			Variants     []struct{ Count int }
+		}
+	}
+	b = DialectTableJSON(s, l.ID, true)
+	valid(t, "dialects", b)
+	if err := json.Unmarshal(b, &d); err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range d.Rows {
+		n := 0
+		for _, v := range r.Variants {
+			n += v.Count
+		}
+		if n > d.Communities || r.Ref != "" && n == 0 {
+			t.Fatalf("%s: %d communities counted of %d", r.Concept, n, d.Communities)
+		}
+	}
+	t.Logf("'water': %d variants; %s: %d core concepts, %d communities", len(m.Variants), l.Name, len(d.Rows), d.Communities)
+}

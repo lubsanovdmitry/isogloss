@@ -140,6 +140,21 @@ if (cap) {
   console.log('skip no capital yet');
 }
 
+// ---- Dialects: a word map, and a language's local forms in Word lists.
+await page.getByRole('button', { name: 'A word', exact: true }).click();
+await page.waitForSelector('ul.wlegend li', { timeout: 30000 });
+const forms = await page.locator('ul.wlegend li').count();
+check(forms >= 1, `word map legend (${forms} entries: ${(await page.locator('.wordmap .maplegend').textContent())?.trim()})`);
+await page.getByRole('button', { name: 'by root' }).click();
+await page.waitForSelector('ul.wlegend li');
+await page.getByRole('button', { name: 'Languages', exact: true }).click();
+await page.getByRole('tab', { name: 'Word lists' }).click();
+await page.getByRole('button', { name: 'Dialects', exact: true }).click();
+await page.waitForSelector('table.dial tbody tr', { timeout: 30000 });
+const varied = await page.locator('table.dial td.vars').evaluateAll((tds) => tds.filter((td) => td.querySelectorAll('.var').length > 1).length);
+check(varied > 0, `dialect table: ${varied} words with more than one local form`);
+await page.getByRole('button', { name: 'Cognates', exact: true }).click();
+
 // ---- Look back: drag to an early frame, release, panels show that moment.
 const slider = page.locator('input[aria-label="Show the language map at an earlier time"]');
 await slider.evaluate((el) => {

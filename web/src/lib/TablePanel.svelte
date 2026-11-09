@@ -1,13 +1,24 @@
 <script lang="ts">
-  import type { Corresp, Engine, Table, TableRow } from './engine';
+  import type { Corresp, Engine, Lang, Table, TableRow } from './engine';
   import { cogTint } from './palette';
 
-  interface Props { engine: Engine; tick: number; onpick: (concept: string) => void }
-  let { engine, tick, onpick }: Props = $props();
+  interface Props { engine: Engine; tick: number; langs: Lang[]; lang: number; onpick: (concept: string) => void }
+  let { engine, tick, langs, lang, onpick }: Props = $props();
+  interface DVariant { form: string; root: number; count: number; loan?: string; donor?: string }
+  interface Dialects { lang: string; communities: number; rows: { concept: string; ref: string; variants: DVariant[] }[] }
+  let dialects = $state<Dialects | null>(null);
+  let dlang = $state(-1);
+  let onlyVaried = $state(false);
+  let open = $state(new Set<string>()); // rows showing all their forms
+  const FEW = 12;
+  // Follow the selected hex's language until one is picked here.
+  $effect(() => {
+    if (dlang < 0 || !langs.some((l) => l.id === dlang)) dlang = lang >= 0 ? lang : (langs[0]?.id ?? -1);
+  });
   let table = $state<Table | null>(null);
   let corr = $state<Corresp | null>(null);
   let filter = $state('');
-  let mode = $state<'words' | 'corr'>('words');
+  let mode = $state<'words' | 'dialects' | 'corr'>('words');
   let all = $state(false);
   let onlyLoans = $state(false);
 
@@ -15,7 +26,10 @@
     void tick;
     const core = !all;
     if (mode === 'words') engine.query<Table>('compare', { core }).then((t) => (table = t));
-    else engine.query<Corresp>('corresp', { min: 2 }).then((c) => (corr = c));
+    else if (mode === 'dialects') {
+      const l = dlang;
+      if (l >= 0) engine.query<Dialects>('dialects', { lang: l, core }).then((d) => (dialects = d)).catch(() => (dialects = null));
+    } else engine.query<Corresp>('corresp', { min: 2 }).then((c) => (corr = c));
   });
   // Correspondence sets grouped by proto-segment (the engine sends them grouped).
   const groups = $derived.by(() => {
@@ -31,6 +45,12 @@
       ? table.rows.filter((r) => r.concept.includes(filter.trim().toLowerCase()) && (!onlyLoans || r.loans.length > 0 || r.dbl.length > 0))
       : [],
   );
+  const drows = $derived(
+    dialects
+      ? dialects.rows.filter((r) => r.concept.includes(filter.trim().toLowerCase()) && (!onlyVaried || r.variants.length > 1))
+      : [],
+  );
+  const loanMark = (v: DVariant) => (v.loan === 'loan' ? 'L' : v.loan === 'learned' ? 'B' : v.loan === 'substrate' ? 'S' : '');
   const loanOf = (r: TableRow, i: number) => r.loans.find((x) => x[0] === i);
   const dblOf = (r: TableRow, i: number) => r.dbl.find((x) => x[0] === i)?.[1];
   const year = (t: number) => t * 25;
@@ -47,6 +67,7 @@
 <div class="bar">
   <div class="seg" role="group" aria-label="Table">
     <button aria-pressed={mode === 'words'} onclick={() => (mode = 'words')}>Cognates</button>
+    <button aria-pressed={mode === 'dialects'} onclick={() => (mode = 'dialects')}>Dialects</button>
     <button aria-pressed={mode === 'corr'} onclick={() => (mode = 'corr')}>Sound correspondences</button>
   </div>
   {#if mode === 'words'}
@@ -58,6 +79,20 @@
       Shaded cells use a new root; the same shade in a row marks cognates.
       <span class="mk loan">L</span> loan from another language, <span class="mk sub">S</span> substrate word, <span class="mk loan">B</span> bookish loan from a classical language,
       <span class="mk dbl">D</span> doublet (the root came in twice). Hover a mark for its source.
+    </span>
+  {:else if mode === 'dialects'}
+    <label>Language
+      <select bind:value={dlang}>
+        {#each langs as l (l.id)}<option value={l.id}>{l.name}</option>{/each}
+      </select>
+    </label>
+    <label for="dfilter">Find concept</label>
+    <input id="dfilter" bind:value={filter} placeholder="e.g. water" />
+    <label class="chk"><input type="checkbox" bind:checked={all} /> all concepts</label>
+    <label class="chk"><input type="checkbox" bind:checked={onlyVaried} /> only words that vary</label>
+    <span class="note">
+      Every local form of each word in {dialects?.lang ?? 'the language'}, with how many of its {dialects?.communities ?? ''} communities say it,
+      commonest first. Shades mark roots (unshaded: the commonest root); <strong>bold</strong> is the form in the word list.
     </span>
   {:else}
     <span class="note">Each row is a proto-sound and what it became in every language, counted over core words all of them inherited. Recurring sets are regular sound laws; a sound with several rows split by context.</span>
@@ -86,6 +121,36 @@
     </div>
   {:else if corr}
     <p class="note">Not enough words are still shared by every language to find regular correspondences.</p>
+  {/if}
+{:else if mode === 'dialects'}
+  {#if dialects}
+    <div class="wrap">
+      <table class="dial">
+        <thead><tr><th scope="col">Concept</th><th scope="col">Forms</th></tr></thead>
+        <tbody>
+          {#each drows as r (r.concept)}
+            <tr>
+              <th scope="row"><button class="link" onclick={() => onpick(r.concept)}>{r.concept}</button></th>
+              <td class="vars">
+                {#if !r.variants.length}<span class="none">—</span>{/if}
+                {#each open.has(r.concept) ? r.variants : r.variants.slice(0, FEW) as v (v.form)}
+                  <span class="var" style:background={cogTint(v.root)} class:ref={v.form === r.ref}
+                    title={v.loan ? (v.loan === 'substrate' ? `from the ${v.donor} substrate` : `borrowed from ${v.donor}`) : undefined}>
+                    <span class="ipa">{v.form}</span>{#if loanMark(v)}<sup class="mk {v.loan === 'substrate' ? 'sub' : 'loan'}">{loanMark(v)}</sup>{/if}<span class="cnt">×{v.count}</span>
+                  </span>
+                {/each}
+                {#if r.variants.length > FEW && !open.has(r.concept)}
+                  {@const rest = r.variants.slice(FEW)}
+                  <button class="more" onclick={() => (open = new Set([...open, r.concept]))}>
+                    +{rest.length} rarer forms ({rest.reduce((n, v) => n + v.count, 0)} communities)
+                  </button>
+                {/if}
+              </td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </div>
   {/if}
 {:else if table}
   <div class="wrap">
@@ -144,5 +209,11 @@
   .mk.sub { color: var(--ink-soft); }
   .mk.dbl { color: var(--ink); }
   .link { background: none; border: none; padding: 0; cursor: pointer; }
+  .dial td.vars { white-space: normal; }
+  .var { display: inline-block; margin: 0.1rem 0.5rem 0.1rem 0; padding: 0 0.3rem; border-radius: 3px; }
+  .var .ipa { font-size: var(--t-md); }
+  .var.ref .ipa { font-weight: 700; }
+  .more { font-size: var(--t-xs); padding: 0.05rem 0.4rem; }
+  .var .cnt { font-size: var(--t-xs); color: var(--ink-soft); margin-left: 0.25rem; font-variant-numeric: tabular-nums; }
   .link:hover { text-decoration: underline; }
 </style>

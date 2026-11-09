@@ -423,3 +423,11 @@ vowel after the consonant (it used to loop, as nothing had tightened a
 template before). The Change rules tab also offers sound changes: every
 template filled from the community's sounds, scored as the simulation
 scores its own proposals.
+
+**Dialect views.** The comparative table shows one variety per language;
+two views show the variation inside. The map's "A word" mode colours each
+settled hex by its form of a concept (or by root), with a legend of the
+ten commonest; Word lists → Dialects lists, for one language, every local
+form of each word with the number of communities using it, roots shaded
+and the word-list form in bold (`render.DialectMapJSON`,
+`DialectTableJSON`).

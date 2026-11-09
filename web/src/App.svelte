@@ -13,6 +13,7 @@
   import WaveChart from './lib/WaveChart.svelte';
   import PlaceCard from './lib/PlaceCard.svelte';
   import CampaignPanel from './lib/CampaignPanel.svelte';
+  import { langColor } from './lib/palette';
 
   const engine = new Engine();
   const YEARS = 25;
@@ -28,7 +29,11 @@
   let showSubs = $state(false);
   let showNames = $state(true);
   let labels = $state<MapLabel[]>([]);
-  let mapMode = $state<'langs' | 'polities'>('langs');
+  let mapMode = $state<'langs' | 'polities' | 'word'>('langs');
+  interface WordMap { concept: string; variants: { form: string; root: number; count: number; loan?: string; donor?: string }[]; hex: number[] }
+  let wordMap = $state<WordMap | null>(null);
+  let mapBy = $state<'form' | 'root'>('form');
+  const SHOWN = 10; // variants with a colour of their own; the rest share grey
   let concept = $state('water');
   let tab = $state<'campaign' | 'tree' | 'word' | 'table' | 'intel' | 'lang' | 'fable' | 'stories' | 'rules' | 'log'>('tree');
   let cell = $state(-1); // paradigm cell shown in Word history (-1 = dictionary form)
@@ -62,6 +67,35 @@
     const a = new Int32Array(world.hexes.length).fill(-1);
     for (const [h, , , p] of shown.comms) a[h] = p;
     return a;
+  });
+  $effect(() => {
+    void shown?.tick;
+    const c = concept;
+    if (mapMode !== 'word' || !snap) { wordMap = null; return; }
+    engine.query<WordMap>('dialectmap', { label: c }).then((m) => (wordMap = m)).catch(() => (wordMap = null));
+  });
+  // Legend entries: forms, or roots with their forms, each with a colour.
+  const legend = $derived.by(() => {
+    if (!wordMap) return [];
+    if (mapBy === 'form') return wordMap.variants.map((v, i) => ({ key: i, label: v.form, count: v.count, loan: v.loan, donor: v.donor }));
+    const roots: { key: number; label: string; count: number; loan?: string; donor?: string }[] = [];
+    for (const v of wordMap.variants) {
+      let r = roots.find((x) => x.key === v.root);
+      if (!r) roots.push((r = { key: v.root, label: '', count: 0, loan: v.loan, donor: v.donor }));
+      r.label += (r.label ? ', ' : '') + v.form;
+      r.count += v.count;
+    }
+    return roots.sort((a, b) => a.key - b.key);
+  });
+  const wordColor = (k: number) => (k < SHOWN ? langColor(k) : null);
+  const colorOf = $derived.by(() => {
+    if (mapMode !== 'word' || !wordMap || framesOnly) return null;
+    const m = wordMap;
+    return (h: number) => {
+      const i = m.hex[h];
+      if (i === undefined || i < 0) return null;
+      return wordColor(mapBy === 'form' ? i : m.variants[i].root);
+    };
   });
   const capitals = $derived(shown && !framesOnly ? shown.polities.filter((p) => p.fell < 0).map((p) => p.capital) : []);
   const isoSet = $derived(overlay && !viewing ? new Set(overlay.applied) : null);
@@ -273,13 +307,37 @@
 <main>
   <section class="atlas" aria-label="Map">
     {#if world}
-      <Atlas {world} {langOf} {selected} isogloss={isoSet} level={!viewing ? overlay?.level : null} substrates={showSubs} {polityOf} {capitals} routes={framesOnly ? [] : (shown?.routes ?? [])} labels={framesOnly ? [] : labels} onselect={select} />
+      <Atlas {world} {langOf} {selected} isogloss={isoSet} level={!viewing ? overlay?.level : null} substrates={showSubs} {polityOf} {capitals} routes={framesOnly ? [] : (shown?.routes ?? [])} labels={framesOnly ? [] : labels} {colorOf} onselect={select} />
       <div class="under">
         {#if selected >= 0}<PlaceCard {engine} hex={selected} tick={shown?.tick ?? 0} />{/if}
         <div class="seg mapmode" role="group" aria-label="Map colours">
           <button aria-pressed={mapMode === 'langs'} onclick={() => (mapMode = 'langs')}>Languages</button>
           <button aria-pressed={mapMode === 'polities'} onclick={() => (mapMode = 'polities')}>Polities</button>
+          <button aria-pressed={mapMode === 'word'} onclick={() => (mapMode = 'word')}>A word</button>
         </div>
+        {#if mapMode === 'word'}
+          <div class="wordmap">
+            <label>Word <input list="map-concepts" value={concept} size="10" onchange={(e) => { concept = e.currentTarget.value.trim(); cell = -1; }} aria-label="Word to map" /></label>
+            <datalist id="map-concepts">{#each concepts as c (c.id)}<option value={c.label}>{c.gloss}</option>{/each}</datalist>
+            <span class="seg">
+              <button aria-pressed={mapBy === 'form'} onclick={() => (mapBy = 'form')}>by form</button>
+              <button aria-pressed={mapBy === 'root'} onclick={() => (mapBy = 'root')}>by root</button>
+            </span>
+            {#if wordMap}
+              <span class="maplegend">{wordMap.variants.length} {wordMap.variants.length === 1 ? 'form' : 'forms'} of ‘{wordMap.concept}’; grey: rarer forms or no word</span>
+              <ul class="wlegend">
+                {#each legend.slice(0, SHOWN) as e (e.key)}
+                  <li title={e.loan ? (e.loan === 'substrate' ? `from the ${e.donor} substrate` : `borrowed from ${e.donor}`) : undefined}>
+                    <span class="sw" style:background={wordColor(e.key)}></span><span class="ipa">{e.label}</span> <span class="n">{e.count}</span>{#if e.loan}<span class="n"> ({e.loan === 'substrate' ? 'substrate' : 'loan'})</span>{/if}
+                  </li>
+                {/each}
+                {#if legend.length > SHOWN}<li class="n">+{legend.length - SHOWN} more</li>{/if}
+              </ul>
+            {:else}
+              <span class="maplegend">No such word: pick one from the list.</span>
+            {/if}
+          </div>
+        {/if}
         <span class="maplegend">○ capital · ┈ trade route{mapMode === 'polities' ? ' · grey: no polity' : ''}</span>
         <label><input type="checkbox" bind:checked={showNames} onchange={refreshLabels} /> Place names</label>
         {#if world.substrates?.length}
@@ -343,7 +401,7 @@
           <WordPanel {engine} hex={selected} tick={shown.tick} {concepts} {concept} {cell} {cells}
             onconcept={(c) => { concept = c; cell = -1; }} oncell={(k) => (cell = k)} />
         {:else if tab === 'table'}
-          <TablePanel {engine} tick={shown.tick} onpick={(c) => { concept = c; cell = -1; tab = 'word'; }} />
+          <TablePanel {engine} tick={shown.tick} langs={living} lang={shownLang} onpick={(c) => { concept = c; cell = -1; tab = 'word'; }} />
         {:else if tab === 'intel'}
           <IntelPanel {engine} tick={shown.tick} onlang={(id) => { focusLang = id; tab = 'lang'; }} />
         {:else if tab === 'lang'}
@@ -410,9 +468,19 @@
   .mapmode { display: inline-flex; }
   .mapmode button { border-radius: 0; }
   .mapmode button:first-child { border-radius: 3px 0 0 3px; }
-  .mapmode button:last-child { border-radius: 0 3px 3px 0; margin-left: -1px; }
+  .mapmode button:last-child { border-radius: 0 3px 3px 0; }
+  .mapmode button + button { margin-left: -1px; }
   .mapmode button[aria-pressed='true'] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
   .maplegend { font-size: var(--t-xs); color: var(--ink-soft); }
+  .wordmap { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 0.4rem 0.8rem; align-items: center; }
+  .wordmap .seg { display: inline-flex; }
+  .wordmap .seg button { border-radius: 0; padding: 0.15rem 0.5rem; }
+  .wordmap .seg button:first-child { border-radius: 3px 0 0 3px; }
+  .wordmap .seg button:last-child { border-radius: 0 3px 3px 0; margin-left: -1px; }
+  .wordmap .seg button[aria-pressed='true'] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .wlegend { flex-basis: 100%; list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 0.2rem 0.9rem; font-size: var(--t-sm); }
+  .wlegend .sw { display: inline-block; width: 0.75rem; height: 0.75rem; border-radius: 2px; margin-right: 0.3rem; vertical-align: -0.05rem; }
+  .wlegend .n { color: var(--ink-soft); font-size: var(--t-xs); }
   .subs { flex-basis: 100%; font-size: var(--t-sm); color: var(--ink-soft); display: flex; gap: 0.35rem; align-items: center; }
   .wavenote { margin: 0; color: var(--ink-soft); flex-basis: 100%; font-size: var(--t-xs); }
   .scrub input { width: 12rem; max-width: 50vw; }

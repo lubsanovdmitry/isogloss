@@ -13,9 +13,10 @@
     capitals?: number[];
     routes?: number[][];
     labels?: MapLabel[]; // place names to print
+    colorOf?: ((hex: number) => string | null) | null; // overrides the fill of settled hexes (the word map)
     onselect: (hex: number) => void;
   }
-  let { world, langOf, selected, isogloss, level = null, substrates = false, polityOf = null, capitals = [], routes = [], labels = [], onselect }: Props = $props();
+  let { world, langOf, selected, isogloss, level = null, substrates = false, polityOf = null, capitals = [], routes = [], labels = [], colorOf = null, onselect }: Props = $props();
 
   const R = 14; // hex radius
   const W = Math.sqrt(3) * R;
@@ -96,6 +97,7 @@
   function fill(id: number) {
     const h = world.hexes[id];
     if (h.biome === 'sea') return 'var(--sea)';
+    if (colorOf && langOf[id] >= 0) return colorOf(id) ?? 'color-mix(in srgb, var(--ink) 10%, var(--paper))';
     if (polityOf && langOf[id] >= 0) return polityOf[id] >= 0 ? langColor(polityOf[id] + 3) : 'color-mix(in srgb, var(--ink) 14%, var(--paper))';
     if (langOf[id] >= 0) return langColor(langOf[id]);
     return biomeColor(h.biome);
