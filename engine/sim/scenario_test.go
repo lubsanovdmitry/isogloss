@@ -125,24 +125,33 @@ func TestStartersShowWhatTheyPromise(t *testing.T) {
 		}
 	})
 	t.Run("tone delta: tonogenesis", func(t *testing.T) {
+		// Tone spreads as an areal wave; count communities, not only the
+		// capitals languages are recorded at.
 		sc := starter(t, "tone-delta")
-		tonal := 0
-		for _, seed := range []uint64{7, 8} {
+		runs := 0
+		for _, seed := range []uint64{7, 8, 9, 10} {
 			s, _ := NewScenario(seed, DefaultConfig(), sc)
 			s.Run(int(sc.Ticks))
-			for _, l := range s.LivingLanguages() {
-				v := s.CentreVariety(l)
+			tonal := 0
+			for _, c := range s.Communities() {
+				v := c.Variety
+			words:
 				for i := 0; i < v.Lex.Len(); i++ {
 					for _, sg := range v.Lex.At(lex.ConceptID(i)).Form.Segs {
 						if sg.Tone != phon.ToneNone {
 							tonal++
+							break words
 						}
 					}
 				}
 			}
+			t.Logf("seed %d: %d of %d communities tonal", seed, tonal, len(s.Communities()))
+			if tonal*5 >= len(s.Communities()) {
+				runs++
+			}
 		}
-		if tonal == 0 {
-			t.Error("no language became tonal")
+		if runs < 2 {
+			t.Errorf("tone took hold (a fifth of communities) in only %d of 4 runs", runs)
 		}
 	})
 	t.Run("island hopping: founder losses thin inventories", func(t *testing.T) {
