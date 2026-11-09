@@ -1,12 +1,12 @@
 <script lang="ts">
-  import type { Engine, Fable, Lang } from './engine';
+  import type { Engine, Fable, Lang, Polity } from './engine';
   import { MODELS, loadSettings, provider, saveSettings, type StorySettings } from './llm';
-  import { annotations, chronicle, key, nameLanguages, tellMyth, type Chronicle, type Myth, type NameNote } from './story';
+  import { annotations, chronicle, key, nameLanguages, namePolities, tellMyth, type Chronicle, type Myth, type NameNote } from './story';
   import Gloss from './Gloss.svelte';
   import { langColor } from './palette';
 
-  interface Props { engine: Engine; seed: string; tick: number; langs: Lang[] }
-  let { engine, seed, tick, langs }: Props = $props();
+  interface Props { engine: Engine; seed: string; tick: number; langs: Lang[]; polities: Polity[] }
+  let { engine, seed, tick, langs, polities }: Props = $props();
 
   let settings = $state<StorySettings>(loadSettings());
   let draftKey = $state(loadSettings().apiKey);
@@ -105,6 +105,29 @@
   </table>
   <button disabled={!llm || !!busy} onclick={() => run('Naming the peoples', () => nameLanguages(engine, llm!, seed, langs, notes))}>Name the peoples</button>
 </section>
+
+{#if polities.length}
+<section>
+  <h3>Realms</h3>
+  <table class="names">
+    <thead><tr><th scope="col">Polity</th><th scope="col">Its own name</th><th scope="col">Meaning</th><th scope="col">In English</th></tr></thead>
+    <tbody>
+      {#each polities as p (p.id)}
+        {@const n = parse<NameNote>(key(seed, `name/polity/${p.id}`))}
+        <tr>
+          <th scope="row">{p.name} <span class="soft">since {p.founded * 25}</span></th>
+          {#if n}
+            <td><strong>{n.native}</strong> <span class="ipa soft">{n.form}</span></td>
+            <td class="soft">‘{n.meaning}’</td>
+            <td title={n.note}>{n.exonym}</td>
+          {:else}<td class="soft" colspan="3">not named yet</td>{/if}
+        </tr>
+      {/each}
+    </tbody>
+  </table>
+  <button disabled={!llm || !!busy} onclick={() => run('Naming the realms', () => namePolities(engine, llm!, seed, polities, notes))}>Name the realms</button>
+</section>
+{/if}
 
 <section>
   <h3>Chronicles</h3>

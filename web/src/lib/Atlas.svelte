@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { World } from './engine';
+  import type { MapLabel, World } from './engine';
   import { langColor, biomeColor } from './palette';
 
   interface Props {
@@ -12,9 +12,10 @@
     polityOf?: Int32Array | null; // per hex; shown instead of languages when set
     capitals?: number[];
     routes?: number[][];
+    labels?: MapLabel[]; // place names to print
     onselect: (hex: number) => void;
   }
-  let { world, langOf, selected, isogloss, level = null, substrates = false, polityOf = null, capitals = [], routes = [], onselect }: Props = $props();
+  let { world, langOf, selected, isogloss, level = null, substrates = false, polityOf = null, capitals = [], routes = [], labels = [], onselect }: Props = $props();
 
   const R = 14; // hex radius
   const W = Math.sqrt(3) * R;
@@ -159,6 +160,12 @@
       <text x={cx(h.col, h.row)} y={cy(h.row)} class="sublabel">{sb.name}</text>
     {/each}
   {/if}
+  {#each labels as lb (lb.hex)}
+    {@const hx = world.hexes[lb.hex]}
+    <text x={cx(hx.col, hx.row)} y={cy(hx.row) - (lb.capital ? 7 : 0)} class="place" class:cap={lb.capital}>
+      <title>{lb.name}</title>{lb.short}
+    </text>
+  {/each}
   {#if selected >= 0}
     <polygon points={polys[selected]} class="sel" />
   {/if}
@@ -170,6 +177,9 @@
   .subarea { fill: none; stroke: var(--ink); stroke-width: 1.6; stroke-dasharray: 4 3; opacity: 0.75; pointer-events: none; }
   .sublabel { font-family: var(--serif); font-style: italic; font-size: 13px; text-anchor: middle; dominant-baseline: middle; fill: var(--ink);
     paint-order: stroke; stroke: var(--paper); stroke-width: 3px; pointer-events: none; }
+  .place { font-family: var(--serif); font-size: 11px; text-anchor: middle; dominant-baseline: middle; fill: var(--ink);
+    paint-order: stroke; stroke: var(--paper); stroke-width: 2.6px; stroke-linejoin: round; pointer-events: none; }
+  .place.cap { font-weight: 700; font-size: 12px; dominant-baseline: auto; }
   svg { width: 100%; height: auto; display: block; max-height: calc(100vh - 9rem); }
   svg:focus:not(:focus-visible) { outline: none; }
   polygon { stroke: none; }

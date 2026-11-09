@@ -42,6 +42,7 @@ func TestViews(t *testing.T) {
 	valid(t, "innovs", InnovListJSON(s, 3))
 	valid(t, "innov", InnovJSON(s, 1))
 	valid(t, "intel", IntelJSON(s))
+	valid(t, "labels", LabelsJSON(s, 14))
 	valid(t, "place", PlaceJSON(s, s.Communities()[0].Hex))
 	valid(t, "place-sea", PlaceJSON(s, 0))
 	valid(t, "compare-all", Compare(s, false).JSON(s))
@@ -126,4 +127,30 @@ func TestGrammarViews(t *testing.T) {
 		}
 	}
 	t.Logf("%s", CellEtymJSON(s, l.Centre, fire, 1))
+}
+
+func TestLabelsSpreadOut(t *testing.T) {
+	s := sim.New(42, sim.DefaultConfig())
+	s.Run(30)
+	var ls []struct {
+		Hex   int32
+		Name  string
+		Short string
+	}
+	if err := json.Unmarshal(LabelsJSON(s, 14), &ls); err != nil {
+		t.Fatal(err)
+	}
+	if len(ls) < 5 {
+		t.Fatalf("only %d labels", len(ls))
+	}
+	for i, a := range ls {
+		if n := len([]rune(a.Short)); n > 10 {
+			t.Errorf("%q is %d letters on the map", a.Short, n)
+		}
+		for _, b := range ls[:i] {
+			if d := s.World.Distance(a.Hex, b.Hex); d < 3 {
+				t.Errorf("%s and %s are %d hexes apart", a.Name, b.Name, d)
+			}
+		}
+	}
 }

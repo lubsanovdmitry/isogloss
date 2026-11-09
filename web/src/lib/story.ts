@@ -36,45 +36,68 @@ const WORLD =
 const NamesOut = z.object({
   names: z.array(
     z.object({
-      lang: z.number().int().describe('the language id you are naming'),
+      id: z.number().int().describe('the id of the language or polity you are naming'),
       pick: z.number().int().describe('index of the chosen candidate'),
-      exonym: z.string().describe('an English name for the people, one or two words, evocative but plain'),
+      exonym: z.string().describe('an English name, one or two words, evocative but plain'),
       note: z.string().describe('one line on why this name suits them'),
     }),
   ),
 });
 
-/** Names every living language not named yet, in one request. */
-export async function nameLanguages(
-  engine: Engine, llm: StoryProvider, seed: string, langs: { id: number; name: string }[], notes: Map<string, string>,
+export type NameKind = 'lang' | 'polity';
+
+const NAMING: Record<NameKind, { system: string; ask: string; label: string }> = {
+  lang: {
+    system: 'You name its peoples.',
+    ask: 'For each language below, pick the candidate that would make the best name for its speakers, and give an English exonym for the people',
+    label: 'Language',
+  },
+  polity: {
+    system: 'You name its realms.',
+    ask: 'For each polity below, pick the candidate that would make the best name for the realm, and give an English name for it (a kingdom, a league, a land)',
+    label: 'Polity',
+  },
+};
+
+/** Names every language (or polity) on the list not named yet, in one request. */
+export async function nameAll(
+  engine: Engine, llm: StoryProvider, seed: string, kind: NameKind, items: { id: number }[], notes: Map<string, string>,
 ): Promise<number> {
   const todo: { id: number; cands: Candidate[] }[] = [];
-  for (const l of langs) {
-    if (notes.has(key(seed, `name/lang/${l.id}`))) continue;
-    const cands = await engine.query<Candidate[]>('namecands', { kind: 'lang', id: l.id });
-    if (cands.length) todo.push({ id: l.id, cands });
+  for (const it of items) {
+    if (notes.has(key(seed, `name/${kind}/${it.id}`))) continue;
+    const cands = await engine.query<Candidate[]>('namecands', { kind, id: it.id });
+    if (cands.length) todo.push({ id: it.id, cands });
   }
   if (!todo.length) return 0;
+  const n = NAMING[kind];
   const out = await llm.json({
-    system: WORLD + ' You name its peoples. Choose names from the candidates only: they are built from each language\'s own words.',
+    system: WORLD + ' ' + n.system + " Choose names from the candidates only: they are built from each language's own words.",
     prompt:
-      'For each language below, pick the candidate that would make the best name for its speakers, and give an English exonym and a one-line note. ' +
-      'Prefer names that differ from each other. Candidates are numbered from 0.\n\n' +
-      todo.map((t) => `Language ${t.id}:\n` + t.cands.map((c, i) => `  ${i}. ${c.name} [${c.form}] '${c.gloss}'`).join('\n')).join('\n\n'),
+      n.ask + ', and a one-line note. Prefer names that differ from each other. Candidates are numbered from 0.\n\n' +
+      todo.map((t) => `${n.label} ${t.id}:\n` + t.cands.map((c, i) => `  ${i}. ${c.name} [${c.form}] '${c.gloss}'`).join('\n')).join('\n\n'),
     schema: NamesOut,
   });
-  let n = 0;
+  let done = 0;
   for (const t of todo) {
-    const got = out.names.find((x) => x.lang === t.id);
+    const got = out.names.find((x) => x.id === t.id);
     // A pick outside the candidates is rejected: the first candidate stands in.
     const c = got && got.pick >= 0 && got.pick < t.cands.length ? t.cands[got.pick] : t.cands[0];
     const note: NameNote = { native: c.name, form: c.form, meaning: c.gloss, exonym: got?.exonym ?? '', note: got?.note ?? '' };
-    await remember(engine, key(seed, `name/lang/${t.id}`), note);
-    notes.set(key(seed, `name/lang/${t.id}`), JSON.stringify(note));
-    n++;
+    await remember(engine, key(seed, `name/${kind}/${t.id}`), note);
+    notes.set(key(seed, `name/${kind}/${t.id}`), JSON.stringify(note));
+    done++;
   }
-  return n;
+  return done;
 }
+
+/** Names every living language not named yet, in one request. */
+export const nameLanguages = (engine: Engine, llm: StoryProvider, seed: string, langs: { id: number }[], notes: Map<string, string>) =>
+  nameAll(engine, llm, seed, 'lang', langs, notes);
+
+/** Names every standing polity not named yet, in one request. */
+export const namePolities = (engine: Engine, llm: StoryProvider, seed: string, polities: { id: number }[], notes: Map<string, string>) =>
+  nameAll(engine, llm, seed, 'polity', polities, notes);
 
 // ---- Chronicles
 

@@ -19,7 +19,7 @@
       <p class="nm"><strong>{place.name}</strong> <span class="ipa">{place.form}</span></p>
       {#if place.polity}<p class="from">{place.capital ? 'Capital of' : 'Part of'} the polity of {place.polity}{place.rule ? `; under foreign rule: ${place.rule}` : ''}.</p>{/if}
       <p class="from">
-        from {place.namedBy} <span class="ipa">*{place.original}</span> ‘{place.gloss}’{place.substrate ? ', the language spoken here before the family arrived' : ''}{#if place.since}; taken over in year {place.since * 25}{/if}.
+        from {place.namedBy} <span class="ipa">*{place.original}</span> ‘{place.gloss}’{place.substrate ? ', the language spoken here before the family arrived' : ''}{place.shortened ? ', worn down to three syllables' : ''}{#if place.since}; taken over in year {place.since * 25}{/if}.
       </p>
       {#if place.steps?.length}
         <details>

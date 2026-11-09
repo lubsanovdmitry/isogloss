@@ -82,9 +82,19 @@ func (s *Sim) takeName(c *pop.Community) {
 	c.NameAt = c.Variety.Hist.Len()
 	if p.Sub < 0 && p.Fam == c.Variety.Family {
 		c.Name = phon.Word{Segs: p.Form.Segs, Syll: p.Form.Syll} // no longer analysed as a compound
-		return
+	} else {
+		c.Name = contact.Nativize(p.Form, c.Variety, false)
 	}
-	c.Name = contact.Nativize(p.Form, c.Variety, false)
+	c.Name = clipName(c.Name, c.Variety)
+}
+
+// clipName wears a name of more than three syllables down to its first
+// three, as long names do in daily use (Eboracum → York, Lugdunum → Lyon).
+func clipName(w phon.Word, v *lex.Variety) phon.Word {
+	if len(w.Syll) <= 3 {
+		return w
+	}
+	return v.Finish(phon.Word{Segs: slices.Clone(w.Segs[:w.Syll[2].End])})
 }
 
 // PlaceName returns a hex's current name in the community living there and

@@ -9,7 +9,7 @@
 //	step     {n, since}                  advance n ticks; returns snapshot
 //	snapshot {since}
 //	intervene{rule, hex}                 schedule a rule for the next tick
-//	query    {kind, ...}                 compare | corresp | intel | lang | sketch | paradigm | cell | fable | word | innov | innovs | preview | frames | concepts
+//	query    {kind, ...}                 compare | corresp | intel | lang | sketch | paradigm | cell | fable | word | innov | innovs | preview | frames | concepts | labels | place
 //	save                                 returns the save (seed, tick, interventions)
 //	load     {save}                      replay a save
 //	fork     {tick}                      replay this run truncated at tick
@@ -306,6 +306,8 @@ func query(q js.Value) string {
 		return j.String()
 	case "campaign":
 		return string(render.CampaignJSON(cur, true))
+	case "labels":
+		return string(render.LabelsJSON(cur, num(q, "max", 14)))
 	case "place":
 		return string(render.PlaceJSON(cur, int32(num(q, "hex", -1))))
 	case "save":

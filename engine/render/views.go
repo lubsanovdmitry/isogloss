@@ -685,6 +685,7 @@ func PlaceJSON(s *sim.Sim, hex int32) []byte {
 		by = s.Subs[p.Sub].Name
 	}
 	j.Obj().KS("original", phon.RenderWord(phon.Word{Segs: p.Form.Segs})).KS("gloss", p.Gloss).KS("namedBy", by).KB("substrate", p.Sub >= 0).
+		KB("shortened", len(p.Form.Syll) > 3).
 		KS("originalName", phon.Capitalize(phon.Romanize(p.Form)))
 	if w, steps, ok := s.PlaceName(hex); ok {
 		c := s.ByHex[hex]
@@ -708,6 +709,64 @@ func PlaceJSON(s *sim.Sim, hex int32) []byte {
 		j.EndArr()
 	}
 	j.End()
+	return j.Bytes()
+}
+
+// LabelsJSON picks the place names worth printing on the map: capitals of
+// standing polities first, then the most populous communities, each at
+// least three hexes from every label already placed, at most max. Names
+// longer than ten letters are shortened for the map ("short"); the full
+// name goes with them.
+func LabelsJSON(s *sim.Sim, max int) []byte {
+	type cand struct {
+		hex     int32
+		capital bool
+		people  int32
+	}
+	var cs []cand
+	for _, c := range s.Communities() {
+		capital := false
+		if c.Polity >= 0 {
+			p := s.Polities[c.Polity]
+			capital = p.Alive() && p.Capital == c.Hex
+		}
+		cs = append(cs, cand{c.Hex, capital, c.Pop})
+	}
+	slices.SortStableFunc(cs, func(a, b cand) int {
+		if a.capital != b.capital {
+			if a.capital {
+				return -1
+			}
+			return 1
+		}
+		if a.people != b.people {
+			return int(b.people - a.people)
+		}
+		return int(a.hex - b.hex)
+	})
+	var j JSON
+	j.Arr()
+	var placed []int32
+	for _, c := range cs {
+		if len(placed) >= max {
+			break
+		}
+		if slices.ContainsFunc(placed, func(h int32) bool { return s.World.Distance(h, c.hex) < 3 }) {
+			continue
+		}
+		w, _, ok := s.PlaceName(c.hex)
+		if !ok || len(w.Segs) == 0 {
+			continue
+		}
+		placed = append(placed, c.hex)
+		name := phon.Capitalize(phon.Romanize(w))
+		short := name
+		if r := []rune(name); len(r) > 10 {
+			short = string(r[:9]) + "…"
+		}
+		j.Obj().KI("hex", int64(c.hex)).KS("name", name).KS("short", short).KB("capital", c.capital).End()
+	}
+	j.EndArr()
 	return j.Bytes()
 }
 

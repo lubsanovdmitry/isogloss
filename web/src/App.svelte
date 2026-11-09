@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Engine, type Concept, type Event, type Frame, type InnovInfo, type InnovSummary, type Snapshot, type TreeNode, type World, type ScenarioEntry } from './lib/engine';
+  import { Engine, type MapLabel, type Concept, type Event, type Frame, type InnovInfo, type InnovSummary, type Snapshot, type TreeNode, type World, type ScenarioEntry } from './lib/engine';
   import Atlas from './lib/Atlas.svelte';
   import TreeItem from './lib/TreeItem.svelte';
   import WordPanel from './lib/WordPanel.svelte';
@@ -26,6 +26,8 @@
   let scenarios = $state<ScenarioEntry[]>([]);
   let selected = $state(-1);
   let showSubs = $state(false);
+  let showNames = $state(true);
+  let labels = $state<MapLabel[]>([]);
   let mapMode = $state<'langs' | 'polities'>('langs');
   let concept = $state('water');
   let tab = $state<'campaign' | 'tree' | 'word' | 'table' | 'intel' | 'lang' | 'fable' | 'stories' | 'rules' | 'log'>('tree');
@@ -77,7 +79,12 @@
   async function refreshSide() {
     innovs = (await engine.query<InnovSummary[]>('innovs', { min: 4 })).slice(0, 60);
     frames = await engine.query<Frame[]>('frames');
+    await refreshLabels();
     if (overlay) overlay = await engine.query<InnovInfo>('innov', { id: overlay.id });
+  }
+
+  async function refreshLabels() {
+    labels = showNames ? await engine.query<MapLabel[]>('labels', { max: 14 }) : [];
   }
 
   async function newRun() {
@@ -235,7 +242,7 @@
 <main>
   <section class="atlas" aria-label="Map">
     {#if world}
-      <Atlas {world} {langOf} {selected} isogloss={isoSet} level={!viewing ? overlay?.level : null} substrates={showSubs} {polityOf} {capitals} routes={viewing ? [] : (snap?.routes ?? [])} onselect={select} />
+      <Atlas {world} {langOf} {selected} isogloss={isoSet} level={!viewing ? overlay?.level : null} substrates={showSubs} {polityOf} {capitals} routes={viewing ? [] : (snap?.routes ?? [])} labels={viewing ? [] : labels} onselect={select} />
       <div class="under">
         {#if selected >= 0}<PlaceCard {engine} hex={selected} tick={snap?.tick ?? 0} />{/if}
         <div class="seg mapmode" role="group" aria-label="Map colours">
@@ -243,6 +250,7 @@
           <button aria-pressed={mapMode === 'polities'} onclick={() => (mapMode = 'polities')}>Polities</button>
         </div>
         <span class="maplegend">○ capital · ┈ trade route{mapMode === 'polities' ? ' · grey: no polity' : ''}</span>
+        <label><input type="checkbox" bind:checked={showNames} onchange={refreshLabels} /> Place names</label>
         {#if world.substrates?.length}
           <label class="subs"><input type="checkbox" bind:checked={showSubs} /> Show the languages spoken here before ({world.substrates.map((x) => x.name).join(', ')})</label>
         {/if}
@@ -291,7 +299,7 @@
           <CampaignPanel {engine} tick={snap.tick} hex={selected} onscheduled={(m) => (status = m)} oninnov={showInnov} />
         {:else if tab === 'stories'}
           {#await import('./lib/StoryPanel.svelte') then { default: StoryPanel }}
-            <StoryPanel {engine} seed={snap.seed} tick={snap.tick} langs={living} />
+            <StoryPanel {engine} seed={snap.seed} tick={snap.tick} langs={living} polities={snap.polities.filter((p) => p.fell < 0)} />
           {/await}
         {:else if tab === 'tree'}
           {#if nodes.get(0)}
