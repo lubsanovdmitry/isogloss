@@ -1,0 +1,18 @@
+name: Out of Taiwan
+summary: >-
+  Proto-Austronesian speakers, rice farmers and sailors, set out from one
+  island across an archipelago.
+watch: >-
+  Serial founder effects thinning the sound system island by island, the
+  way Polynesian ended up with a handful of consonants.
+ticks: 60
+world:
+  shape: archipelago
+  land: 170
+proto:
+  language: proto-austronesian
+families:
+  - place: island|coast
+    radius: 0
+config:
+  seafaring: true

@@ -34,11 +34,12 @@ func runRun(args []string, out io.Writer) error {
 	ticks := fs.Int("ticks", 0, "ticks to simulate (one tick = one generation, ~25 years); default 40 or the scenario's length")
 	path := fs.String("out", "", "write the run to this JSON file")
 	scen := fs.String("scenario", "", "start from a scenario: a starter ID ("+starterIDs()+") or a YAML file")
+	lang := fs.String("language", "", "start from a real proto-language ("+languageIDs()+")")
 	fs.Parse(args)
 
 	var sc *scenario.Scenario
+	src := ""
 	if *scen != "" {
-		src := ""
 		if st, ok := scenario.StarterByID(*scen); ok {
 			src = st.Src
 		} else {
@@ -48,6 +49,15 @@ func runRun(args []string, out io.Writer) error {
 			}
 			src = string(b)
 		}
+	}
+	if *lang != "" {
+		info, ok := lex.RealByID(*lang)
+		if !ok {
+			return fmt.Errorf("no proto-language %q (one of: %s)", *lang, languageIDs())
+		}
+		src = scenario.WithLanguage(src, *lang, info.Name, info.Summary)
+	}
+	if src != "" {
 		var err error
 		if sc, err = scenario.Read(src); err != nil {
 			return err
@@ -318,6 +328,14 @@ func starterIDs() string {
 	var ids []string
 	for _, st := range scenario.Starters() {
 		ids = append(ids, st.ID)
+	}
+	return strings.Join(ids, ", ")
+}
+
+func languageIDs() string {
+	var ids []string
+	for _, r := range lex.RealProtos() {
+		ids = append(ids, r.ID)
 	}
 	return strings.Join(ids, ", ")
 }

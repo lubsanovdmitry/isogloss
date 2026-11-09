@@ -232,3 +232,33 @@ func TestSettingsRoundTrip(t *testing.T) {
 		t.Errorf("round trip: %+v, want %+v", got, c)
 	}
 }
+
+// Every real proto-language starts a run on its own (as the UI's picker
+// does), keeps its name and listed words, and replays exactly.
+func TestRealLanguagesRun(t *testing.T) {
+	water, _ := lex.ConceptByLabel("water")
+	for _, info := range lex.RealProtos() {
+		sc, err := scenario.Read(scenario.WithLanguage("", info.ID, info.Name, info.Summary))
+		if err != nil {
+			t.Fatalf("%s: %v", info.ID, err)
+		}
+		s, err := NewScenario(5, DefaultConfig(), sc)
+		if err != nil {
+			t.Fatalf("%s: %v", info.ID, err)
+		}
+		if s.ProtoName() != info.Name {
+			t.Errorf("%s: named %q", info.ID, s.ProtoName())
+		}
+		if s.CoinedRoot(0, water) {
+			t.Errorf("%s: no word for water", info.ID)
+		}
+		t.Logf("%s: water %s%s", info.Name, s.Star(0), phon.RenderWord(s.Proto.Variety.Lex.At(water).Form))
+		s.Run(6)
+		if r := Replay(s.SaveState()); r.Digest() != s.Digest() {
+			t.Errorf("%s: replay differs", info.ID)
+		}
+	}
+	if _, err := NewScenario(1, DefaultConfig(), &scenario.Scenario{Name: "x", Proto: scenario.Proto{Language: "klingon"}}); err == nil {
+		t.Error("an unknown language was accepted")
+	}
+}

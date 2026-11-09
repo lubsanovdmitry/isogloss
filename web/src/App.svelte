@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Engine, type Pending, type MapLabel, type Concept, type Event, type Frame, type InnovInfo, type InnovSummary, type Snapshot, type TreeNode, type World, type ScenarioEntry } from './lib/engine';
+  import { Engine, type Pending, type MapLabel, type Concept, type Event, type Frame, type InnovInfo, type InnovSummary, type Snapshot, type TreeNode, type World, type ScenarioEntry, type LanguageEntry } from './lib/engine';
   import Atlas from './lib/Atlas.svelte';
   import TreeItem from './lib/TreeItem.svelte';
   import WordPanel from './lib/WordPanel.svelte';
@@ -45,6 +45,11 @@
   }
   let scenarioID = $state('');
   let scenarios = $state<ScenarioEntry[]>([]);
+  let languageID = $state('');
+  let languages = $state<LanguageEntry[]>([]);
+  const chosenScenario = $derived(scenarios.find((s) => s.id === scenarioID));
+  const ownLanguage = $derived(languages.find((l) => l.id === chosenScenario?.language)?.name);
+  const chosenLanguage = $derived(languages.find((l) => l.id === languageID));
   let selected = $state(-1);
   let showSubs = $state(false);
   let showNames = $state(true);
@@ -167,7 +172,10 @@
     busy = true;
     status = 'Generating a continent and its proto-language…';
     try {
-      const r = await engine.call<{ world: World; snapshot: Snapshot }>('init', { seed: seed.trim() || '1', scenario: scenarioID, config: { ...cfg } });
+      const r = await engine.call<{ world: World; snapshot: Snapshot }>('init', {
+        seed: seed.trim() || '1', scenario: scenarioID, config: { ...cfg },
+        language: chosenScenario?.fixedLanguages ? '' : languageID,
+      });
       labels = []; // the old world's hexes
       wordMap = null;
       selected = -1;
@@ -302,6 +310,7 @@
     cfgDefaults = await engine.query<Record<string, number>>('config');
     concepts = await engine.query<Concept[]>('concepts');
     scenarios = await engine.query<ScenarioEntry[]>('scenarios');
+    languages = await engine.query<LanguageEntry[]>('languages');
     cells = await engine.query<Record<string, string[]>>('cells');
     await newRun();
   });
@@ -332,6 +341,12 @@
       <select bind:value={scenarioID} aria-label="Scenario">
         <option value="">one family, one homeland</option>
         {#each scenarios as sc (sc.id)}<option value={sc.id}>{sc.name}</option>{/each}
+      </select>
+    </label>
+    <label title={chosenScenario?.fixedLanguages ? 'This scenario sets the language of each family.' : chosenLanguage ? `${chosenLanguage.summary} ${chosenLanguage.forms} words from ${chosenLanguage.source}; the rest are coined.` : 'A proto-language invented for this run, or a real one to start from.'}>Language
+      <select bind:value={languageID} aria-label="Proto-language" disabled={chosenScenario?.fixedLanguages}>
+        <option value="">{chosenScenario?.fixedLanguages ? 'set by the scenario' : ownLanguage ?? 'invented'}</option>
+        {#each languages as l (l.id)}<option value={l.id}>{l.name}</option>{/each}
       </select>
     </label>
     <button onclick={() => (showSettings = !showSettings)} aria-expanded={showSettings}>Settings{Object.keys(cfg).length ? ` (${Object.keys(cfg).length} changed)` : ''}</button>

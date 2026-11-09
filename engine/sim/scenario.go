@@ -68,7 +68,7 @@ func NewScenario(seed uint64, cfg Config, sc *scenario.Scenario) (*Sim, error) {
 		if len(sc.Families) > 0 {
 			fams = sc.Families
 		}
-		opt = lex.ProtoOptions{Template: sc.Proto.Template, MaxSyllables: int(sc.Proto.Syllables), FinalGlottal: uint32(max(sc.Proto.FinalGlottal, 0))}
+		opt = lex.ProtoOptions{Template: sc.Proto.Template, MaxSyllables: int(sc.Proto.Syllables), FinalGlottal: uint32(max(sc.Proto.FinalGlottal, 0)), Language: sc.Proto.Language}
 	}
 	if len(fams) > 8 {
 		return nil, errors.New("scenario: at most 8 families")
@@ -82,6 +82,14 @@ func NewScenario(seed uint64, cfg Config, sc *scenario.Scenario) (*Sim, error) {
 		homes[f] = h
 		o := opt
 		o.Family = uint8(f)
+		if fam.Language != "" {
+			o.Language = fam.Language
+		}
+		if o.Language != "" {
+			if _, ok := lex.RealByID(o.Language); !ok {
+				return nil, errors.New("scenario: unknown proto-language '" + o.Language + "' (one of: " + realIDs() + ")")
+			}
+		}
 		r := rng.New(seed, rng.Key("proto"))
 		if f > 0 {
 			r = rng.New(seed, rng.Key("proto"), uint64(f))
@@ -252,6 +260,14 @@ func (c Config) Settings() []Setting {
 		{"width", int64(c.World.W)}, {"height", int64(c.World.H)}, {"land", int64(c.World.Land)},
 		{"rivers", int64(c.World.Rivers)}, {"shape", int64(c.World.Shape)},
 	}
+}
+
+func realIDs() string {
+	var ids []string
+	for _, r := range lex.RealProtos() {
+		ids = append(ids, r.ID)
+	}
+	return strings.Join(ids, ", ")
 }
 
 func (s *Sim) nearestFamily(homes []int32, h int32) uint8 {

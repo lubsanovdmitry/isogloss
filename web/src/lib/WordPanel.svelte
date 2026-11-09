@@ -52,7 +52,7 @@
     <h2><span class="ipa">{etym.form || '—'}</span> <span class="gloss">‘{etym.concept}’</span></h2>
     <p class="lang">{etym.lang}, hex {etym.hex}</p>
     <ol>
-      <li class="origin"><span class="t"></span><span class="what">{etym.protoLang}</span><span class="ipa">*{etym.proto}</span></li>
+      <li class="origin"><span class="t"></span><span class="what">{etym.protoLang}{#if etym.coined} <span class="coined">(coined)</span>{/if}</span><span class="ipa">{etym.star}{etym.proto}</span></li>
       {#each etym.steps as s, i (i)}
         <li class:repair={s.innov === 0}>
           <span class="t">{s.tick * 25} yrs</span>
@@ -80,7 +80,7 @@
     <h2><span class="ipa">{cet.form}</span> <span class="gloss">‘{cet.concept}’, {cet.cell}</span></h2>
     <p class="lang">{cet.lang ?? ''}, hex {hex} · <Gloss text={cet.gloss} /></p>
     <ol>
-      <li class="origin"><span class="t"></span><span class="what">{cet.protoLang} <Gloss text={cet.protoGloss} /></span><span class="ipa">*{cet.proto}</span></li>
+      <li class="origin"><span class="t"></span><span class="what">{cet.protoLang} <Gloss text={cet.protoGloss} /></span><span class="ipa">{cet.star}{cet.proto}</span></li>
       {#each cet.steps as s, i (i)}
         <li class:gram={s.label.includes('clitic') || s.label.includes('suffix') || s.label.includes('prefix')} class:analogy={s.label.startsWith('analogy')}>
           <span class="t">{s.tick * 25} yrs</span>
@@ -111,6 +111,7 @@
   .t { color: var(--ink-soft); font-size: var(--t-sm); font-variant-numeric: tabular-nums; }
   .origin .what { font-style: italic; }
   .root { color: var(--ink-soft); font-size: var(--t-sm); }
+  .coined { color: var(--ink-soft); font-weight: normal; }
   .hint { color: var(--ink-soft); }
   .spell { font-family: var(--serif); font-style: italic; }
   .loan { color: var(--isogloss); font-size: var(--t-sm); margin-bottom: 0; }

@@ -23,6 +23,7 @@ import (
 func usage() {
 	fmt.Fprintln(os.Stderr, `usage:
   isogloss run [--seed N] [--ticks N] [--out run.json]   simulate and save a run
+      [--scenario ID|FILE] [--language ID]                start from a scenario or a real proto-language
   isogloss etym RUN.json CONCEPT [--lang NAME] [--form CELL]
                                                         trace a word's history (CELL: PL, PST.3SG…)
   isogloss grammar RUN.json [--lang NAME]               Markdown grammar sketches

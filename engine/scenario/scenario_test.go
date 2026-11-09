@@ -62,3 +62,23 @@ func TestStarters(t *testing.T) {
 		t.Error("unknown key accepted")
 	}
 }
+
+func TestWithLanguage(t *testing.T) {
+	sc, err := Read(WithLanguage("", "latin", "Latin", "Spoken Latin: cases."))
+	if err != nil || sc.Proto.Language != "latin" || sc.Name != "Latin" {
+		t.Fatalf("minimal: %+v %v", sc, err)
+	}
+	for _, st := range Starters() {
+		sc, err := Read(WithLanguage(st.Src, "pie", "", ""))
+		if err != nil {
+			t.Fatalf("%s: %v", st.ID, err)
+		}
+		if sc.Proto.Language != "pie" {
+			t.Errorf("%s: language %q", st.ID, sc.Proto.Language)
+		}
+		// Applying twice replaces, never duplicates.
+		if _, err := Read(WithLanguage(WithLanguage(st.Src, "latin", "", ""), "pie", "", "")); err != nil {
+			t.Errorf("%s twice: %v", st.ID, err)
+		}
+	}
+}

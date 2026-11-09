@@ -21,11 +21,13 @@ export interface CampaignDetail extends CampaignInfo {
   innovations: { id: number; label: string; kind: string; rule: string; applied: number; steer: number }[];
 }
 export interface ScenarioInfo { name: string; summary: string; watch: string; ticks: number; events?: { tick: number; do: string }[] }
-export interface ScenarioEntry extends ScenarioInfo { id: string; families: number }
+export interface ScenarioEntry extends ScenarioInfo { id: string; families: number; language: string; fixedLanguages: boolean }
+/** A real proto-language a run can start from. */
+export interface LanguageEntry { id: string; name: string; summary: string; source: string; forms: number; attested: boolean }
 export interface Polity { id: number; name: string; capital: number; founded: number; fell: number; seafaring: boolean }
 export interface Step { tick: number; innov: number; label: string; before: string; after: string }
 export interface Etym {
-  concept: string; gloss: string; lang: string; hex: number; proto: string; protoLang: string; form: string; root: string; steps: Step[]; text: string;
+  concept: string; gloss: string; lang: string; hex: number; proto: string; star: string; coined: boolean; protoLang: string; form: string; root: string; steps: Step[]; text: string;
   loan: string; also: string; senses: string[]; doublets: { concept: string; form: string; loan: boolean }[];
   spelling: string; gap: number; script: string;
 }
@@ -34,7 +36,7 @@ export interface TableRow {
   loans: [number, 'loan' | 'substrate' | 'learned', string, number][]; // language index, kind, donor, tick
   dbl: [number, string][]; // language index, concept sharing the root
 }
-export interface Table { protos: number; langs: string[]; rows: TableRow[] }
+export interface Table { protos: number; stars: string[]; langs: string[]; rows: TableRow[] }
 export interface Writing {
   polity: string; script: string; since: number; reformed: number; from: string; classical: boolean; gap: number; standard?: number;
   examples: { concept: string; spelling: string; form: string; now: string; gap: number }[];
@@ -62,11 +64,11 @@ export interface Paradigm {
 }
 export interface Fable { english: string[]; langs: { name: string; id: number; order: string; lines: { f: string; g: string }[][] }[] }
 export interface CellEtym {
-  concept: string; cell: string; form: string; gloss: string; proto: string; protoGloss: string; protoLang: string; lang?: string;
+  concept: string; cell: string; form: string; gloss: string; proto: string; protoGloss: string; protoLang: string; star: string; lang?: string;
   steps: Step[]; baseLabel?: string; base?: string; freq: number; irregular: boolean;
 }
 export interface InnovInfo { id: number; kind: string; label: string; rule: string; origin: number; tick: number; applied: number[]; curve: [number, number][]; level?: number[] }
-export interface Corresp { proto: string; langs: string[]; sets: { proto: string; count: number; reflexes: string[]; examples: string[] }[] }
+export interface Corresp { proto: string; star: string; langs: string[]; sets: { proto: string; count: number; reflexes: string[]; examples: string[] }[] }
 export interface InnovSummary { id: number; label: string; tick: number; origin: number; hexes: number }
 export interface Concept { id: number; label: string; gloss: string; core: boolean; field: string; pos?: string }
 export interface Frame { tick: number; lang: number[] }

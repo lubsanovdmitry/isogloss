@@ -1,0 +1,27 @@
+name: Latin after the empire
+summary: >-
+  Latin is spoken across the whole continent, held together by an empire
+  with a written standard. The empire breaks apart in year 400.
+watch: >-
+  Latin breaking up into a continuum of daughter languages once the centre
+  no longer holds: vowel length turning into quality, final consonants
+  wearing away, case endings giving way to prepositions and word order.
+ticks: 60
+world:
+  land: 220
+proto:
+  language: latin
+families:
+  - place: centre
+    radius: all
+config:
+  collapse-rate: 0 # the empire stands until it is made to fall
+polities:
+  - capital: centre
+    covers: all
+    script: alphabet
+    standard: true
+events:
+  - year: 400
+    do: collapse
+    polity: 0

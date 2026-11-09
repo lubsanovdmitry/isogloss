@@ -194,7 +194,7 @@ func CellEtymJSON(s *sim.Sim, hex int32, c lex.ConceptID, cell int) []byte {
 	form, gloss := Gloss(cur, lex.Concepts()[c].Label, cells[cell], &com.Variety.M)
 	pform, pgloss := Gloss(start, lex.Concepts()[c].Label, cells[cell], &proto.M)
 	j.Obj().KS("concept", lex.Concepts()[c].Label).KS("cell", cells[cell].Label).KS("form", form).KS("gloss", gloss).
-		KS("proto", pform).KS("protoGloss", pgloss).KS("protoLang", s.FamilyName(com.Variety.Family))
+		KS("proto", pform).KS("protoGloss", pgloss).KS("protoLang", s.FamilyName(com.Variety.Family)).KS("star", s.Star(com.Variety.Family))
 	if com.Lang >= 0 {
 		j.KS("lang", s.Langs[com.Lang].Name)
 	}

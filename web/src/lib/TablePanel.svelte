@@ -109,7 +109,7 @@
           {#each groups as g (g.proto)}
             {#each g.sets as c, k (k)}
               <tr class:first={k === 0}>
-                <th scope="row" class="ipa">{k === 0 ? '*' + c.proto : ''}</th>
+                <th scope="row" class="ipa">{k === 0 ? corr.star + c.proto : ''}</th>
                 {#each c.reflexes as r, i (i)}<td class="ipa" class:same={r === c.proto} class:lost={r === '∅'}>{r}</td>{/each}
                 <td class="num">{c.count}</td>
                 <td class="ex">{c.examples.join(', ')}</td>
@@ -169,7 +169,7 @@
                 <td class="none" title="no word: the thing is not known here">—</td>
               {:else}
                 <td class="ipa" style:background={cogTint(r.cog[i])} title={cellTitle(r, i) || undefined}>
-                  {i < table.protos ? '*' : ''}{f}{#if l}<sup class="mk {l[1] === 'substrate' ? 'sub' : 'loan'}">{l[1] === 'loan' ? 'L' : l[1] === 'learned' ? 'B' : 'S'}</sup>{/if}{#if d}<sup class="mk dbl">D</sup>{/if}
+                  {i < table.protos ? table.stars[i] : ''}{f}{#if l}<sup class="mk {l[1] === 'substrate' ? 'sub' : 'loan'}">{l[1] === 'loan' ? 'L' : l[1] === 'learned' ? 'B' : 'S'}</sup>{/if}{#if d}<sup class="mk dbl">D</sup>{/if}
                 </td>
               {/if}
             {/each}

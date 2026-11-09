@@ -183,8 +183,37 @@ func (s *Sim) ProtoName() string { return s.FamilyName(0) }
 
 // FamilyName names family f's proto-language.
 func (s *Sim) FamilyName(f uint8) string {
+	if n := s.Protos[f].Name; n != "" {
+		// Two families may start from the same language: number the later.
+		k := 1
+		for g := range f {
+			if s.Protos[g].Name == n {
+				k++
+			}
+		}
+		if k > 1 {
+			return n + " " + strconv.Itoa(k)
+		}
+		return n
+	}
 	c, _ := lex.ConceptByLabel("person")
 	return "Proto-" + phon.Capitalize(phon.Romanize(s.Protos[f].Variety.Lex.At(c).Form))
+}
+
+// Star is the mark before family f's proto-language forms: "*" for a
+// reconstruction, "" for an attested language such as Latin.
+func (s *Sim) Star(f uint8) string {
+	if s.Protos[f].Attested {
+		return ""
+	}
+	return "*"
+}
+
+// CoinedRoot reports whether concept c of family f's proto-language was
+// coined by the engine because the real language's table had no form.
+func (s *Sim) CoinedRoot(f uint8, c lex.ConceptID) bool {
+	p := s.Protos[f]
+	return p.Coined != nil && p.Coined[c]
 }
 
 // ProtoOf returns the proto-language a variety descends from.

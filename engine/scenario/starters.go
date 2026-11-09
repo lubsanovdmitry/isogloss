@@ -39,3 +39,35 @@ func StarterByID(id string) (Starter, bool) {
 	}
 	return Starter{}, false
 }
+
+// WithLanguage returns scenario source that starts from the real
+// proto-language id: src with its proto section's language set, or, for
+// an empty src, a minimal scenario named after the language. Families
+// that name their own language keep it.
+func WithLanguage(src, id, name, summary string) string {
+	if src == "" {
+		return "name: " + name + "\nsummary: >-\n  " + summary +
+			"\nwatch: How its sounds, words and grammar drift as its speakers spread and split.\nproto:\n  language: " + id + "\n"
+	}
+	lines := strings.Split(strings.TrimRight(src, "\n"), "\n")
+	var out []string
+	in, done := false, false
+	for _, l := range lines {
+		top := l != "" && l[0] != ' ' && l[0] != '#'
+		if top {
+			in = strings.HasPrefix(l, "proto:")
+		}
+		if in && !top && strings.HasPrefix(strings.TrimSpace(l), "language:") {
+			continue
+		}
+		out = append(out, l)
+		if top && in {
+			out = append(out, "  language: "+id)
+			done = true
+		}
+	}
+	if !done {
+		out = append(out, "proto:", "  language: "+id)
+	}
+	return strings.Join(out, "\n") + "\n"
+}

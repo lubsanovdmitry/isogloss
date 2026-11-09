@@ -128,6 +128,8 @@ type Etym struct {
 	Lang     string
 	Hex      int32
 	Proto    string // proto form
+	Star     string // "*" before a reconstructed proto form
+	Coined   bool   // the proto form was coined: the real language's table has none
 	ProtoLng string
 	Form     string
 	Steps    []history.TraceStep
@@ -212,6 +214,7 @@ func EtymOf(s *sim.Sim, hex int32, c lex.ConceptID) (*Etym, bool) {
 	e := &Etym{
 		Concept: lex.Concepts()[c], Hex: hex, Proto: phon.RenderWord(proto.Lex.At(c).Form),
 		ProtoLng: s.FamilyName(com.Variety.Family), Form: phon.RenderWord(final.Form), Steps: steps,
+		Star: s.Star(com.Variety.Family), Coined: s.CoinedRoot(com.Variety.Family, c),
 	}
 	if com.Lang >= 0 {
 		e.Lang = s.Langs[com.Lang].Name
@@ -222,6 +225,9 @@ func EtymOf(s *sim.Sim, hex int32, c lex.ConceptID) (*Etym, bool) {
 		e.Root = "no word: the thing is not known here yet"
 	case final.Etym == lex.FamilyRoot(com.Variety.Family, c) && !final.Stratum.Loan():
 		e.Root = "inherited from " + e.ProtoLng
+		if e.Coined {
+			e.Root += " (no recorded or reconstructed word: this one was coined for the run)"
+		}
 	default:
 		e.Root = RootDesc(s, final.Etym)
 	}
@@ -248,7 +254,7 @@ func EtymOf(s *sim.Sim, hex int32, c lex.ConceptID) (*Etym, bool) {
 func (e *Etym) Text() string {
 	var b strings.Builder
 	b.WriteString(e.Form + "  '" + e.Concept.Label + "'  " + e.Lang + "\n")
-	b.WriteString("  < *" + e.Proto + "  " + e.ProtoLng + "\n")
+	b.WriteString("  < " + e.Star + e.Proto + "  " + e.ProtoLng + "\n")
 	w := 4
 	for _, s := range e.Steps {
 		w = max(w, len([]rune(s.Label)))
@@ -279,7 +285,7 @@ func (e *Etym) Text() string {
 func (e *Etym) JSON() []byte {
 	var j JSON
 	j.Obj().KS("concept", e.Concept.Label).KS("gloss", e.Concept.Gloss).KS("lang", e.Lang).
-		KI("hex", int64(e.Hex)).KS("proto", e.Proto).KS("protoLang", e.ProtoLng).KS("form", e.Form).
+		KI("hex", int64(e.Hex)).KS("proto", e.Proto).KS("star", e.Star).KB("coined", e.Coined).KS("protoLang", e.ProtoLng).KS("form", e.Form).
 		KS("root", e.Root).KS("loan", e.Loan).KS("also", e.Also).KS("spelling", e.Spelling).KI("gap", int64(e.Gap)).KS("script", e.Script).KS("text", e.Text()).K("senses").Arr()
 	for _, x := range e.Senses {
 		j.S(x)
@@ -368,7 +374,11 @@ func Compare(s *sim.Sim, core bool) Table {
 // [[language index, other concept]].
 func (t Table) JSON(s *sim.Sim) []byte {
 	var j JSON
-	j.Obj().KI("protos", int64(t.Protos)).K("langs").Arr()
+	j.Obj().KI("protos", int64(t.Protos)).K("stars").Arr()
+	for f := range t.Protos {
+		j.S(s.Star(uint8(f)))
+	}
+	j.EndArr().K("langs").Arr()
 	for _, l := range t.Langs {
 		j.S(l)
 	}
@@ -932,8 +942,24 @@ func ScenariosJSON() []byte {
 		if err != nil {
 			continue
 		}
+		fixed := false
+		for _, f := range sc.Families {
+			fixed = fixed || f.Language != ""
+		}
 		j.Obj().KS("id", st.ID).KS("name", sc.Name).KS("summary", sc.Summary).KS("watch", sc.Watch).KI("ticks", int64(sc.Ticks)).
-			KI("families", int64(max(1, len(sc.Families)))).End()
+			KI("families", int64(max(1, len(sc.Families)))).KS("language", sc.Proto.Language).KB("fixedLanguages", fixed).End()
+	}
+	j.EndArr()
+	return j.Bytes()
+}
+
+// LanguagesJSON lists the real proto-languages a run can start from.
+func LanguagesJSON() []byte {
+	var j JSON
+	j.Arr()
+	for _, r := range lex.RealProtos() {
+		j.Obj().KS("id", r.ID).KS("name", r.Name).KS("summary", r.Summary).KS("source", r.Source).
+			KI("forms", int64(r.Forms)).KB("attested", r.Attested).End()
 	}
 	j.EndArr()
 	return j.Bytes()

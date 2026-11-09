@@ -154,7 +154,14 @@ func (p *Proto) genMorph(r *rng.Stream) {
 			set(s, true)
 		}
 	}
-	// Paradigms: attach bound exponents innermost group first.
+	p.buildParadigms(mats)
+}
+
+// buildParadigms gives every tracked lexeme its cells: the stem with the
+// bound exponents (material mats[slot]) attached, innermost group first.
+func (p *Proto) buildParadigms(mats [][]phon.Segment) {
+	v := p.Variety
+	m := &v.M
 	tr := Tracked()
 	m.Para = make([]*morph.Paradigm, len(tr))
 	for i, t := range tr {

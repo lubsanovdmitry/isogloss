@@ -258,6 +258,24 @@ await page.getByRole('button', { name: 'New world' }).click();
 await page.waitForFunction(() => document.querySelectorAll('svg[role="application"] > polygon:not(.sel):not(.wave)').length === 26 * 20, null, { timeout: 60000 });
 check(true, 'defaults restored');
 
+// ---- Real proto-languages: start from Latin; a scenario that sets its own.
+const langPick = page.locator('select[aria-label="Proto-language"]');
+await langPick.selectOption({ label: 'Latin' });
+await page.getByRole('button', { name: 'New world' }).click();
+await page.waitForFunction(() => document.querySelector('.proto')?.textContent?.trim() === 'Latin' && !document.querySelector('.status')?.textContent?.includes('Generating'), null, { timeout: 60000 });
+await page.getByRole('tab', { name: 'Word lists' }).click();
+const aqua = page.locator('td.ipa', { hasText: 'akʷa' }).first();
+await aqua.waitFor({ timeout: 30000 });
+const aquaText = ((await aqua.textContent()) ?? '').trim();
+check(aquaText === 'ˈakʷa', `Latin starts with its own words, unstarred (${aquaText})`);
+await page.locator('select[aria-label="Scenario"]').selectOption({ label: 'Out of the steppe' });
+check(await langPick.isDisabled(), 'a scenario that sets each family\'s language disables the picker');
+await page.locator('select[aria-label="Scenario"]').selectOption({ label: 'one family, one homeland' });
+await langPick.selectOption({ index: 0 });
+await page.getByRole('button', { name: 'New world' }).click();
+await page.waitForFunction(() => document.querySelector('.proto')?.textContent?.startsWith('Proto-') && !document.querySelector('.status')?.textContent?.includes('Generating'), null, { timeout: 60000 });
+check(true, 'back to an invented language');
+
 // ---- Timing.
 await page.getByRole('button', { name: 'Time 1000 years' }).click();
 await page.waitForFunction(() => /simulated in \d+ ms/.test(document.querySelector('.status')?.textContent ?? ''), null, { timeout: 120000 });

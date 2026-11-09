@@ -1,0 +1,30 @@
+name: Out of the steppe
+summary: >-
+  Herders speaking Proto-Indo-European, few in number but with horses and
+  wagons, spread from the steppe over farmers who speak an unrelated
+  language.
+watch: >-
+  Proto-Indo-European splitting into branches as it spreads, and what the
+  farmers' language leaves behind in it: substrate words, sounds and
+  word order.
+ticks: 80
+families:
+  - name: farmers
+    place: fertile
+    radius: 4
+  - name: herders
+    place: steppe|west|east
+    radius: 1
+    language: pie
+polities:
+  - capital: family 2
+    covers: 1
+events:
+  - year: 300
+    do: conquer
+    polity: 0
+    place: fertile
+  - year: 500
+    do: conquer
+    polity: 0
+    place: centre

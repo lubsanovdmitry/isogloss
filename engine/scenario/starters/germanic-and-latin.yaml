@@ -1,0 +1,36 @@
+name: Germanic and Latin
+summary: >-
+  Latin-speaking provinces of an empire in the south, Proto-Germanic tribes
+  in the north. The tribes cross the frontier in year 350; the empire falls
+  in year 450.
+watch: >-
+  Latin loans flowing north while the empire stands, then Germanic rulers
+  over Latin speakers: a superstrate of words for war and rule, and which
+  side of the old frontier each language ends up on.
+ticks: 60
+families:
+  - name: Latin
+    place: south
+    radius: 4
+    language: latin
+  - name: Germanic
+    place: north
+    radius: 3
+    language: proto-germanic
+config:
+  collapse-rate: 0
+polities:
+  - capital: family 1
+    covers: all
+    script: alphabet
+    standard: true
+  - capital: family 2
+    covers: 1
+events:
+  - year: 350
+    do: conquer
+    polity: 1
+    place: south
+  - year: 450
+    do: collapse
+    polity: 0

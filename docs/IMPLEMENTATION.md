@@ -462,3 +462,36 @@ would need word traces built from full replays. A stronger penalty on
 merging sound changes and a minimal-word penalty were tried: they slowed
 divergence and did not reduce homophony, so they were dropped.
 Diacritics: combining marks now precede spacing ones (ɨ̈̃ː, not ɨ̃ː̈).
+
+## Real proto-languages (2026-11-09)
+
+A run can start from a real language instead of a generated one:
+`proto: language: latin` in a scenario (or `language:` on one family), the
+Language picker in the UI, or `isogloss run --language`. Four ship, each a
+hand-written table in `engine/data/protos/`: Latin (attested, so its forms
+carry no asterisk), Proto-Indo-European, Proto-Germanic and
+Proto-Austronesian. A table gives the forms by concept label (`=label`
+shares another concept's word, as PAN *lima 'hand, five'), the syllable
+template, stress rule, word order and the exponents of each grammatical slot
+(affix, clitic, or a periphrasis built on a concept). `lex.realProto` builds
+the proto-language from it: the inventory is the table's segments weighted
+by use, so roots coined for the concepts the table leaves out (2 for Latin,
+~25 for Proto-Germanic, ~80 for PIE, ~120 for PAN) sound like the language;
+they are marked (`Proto.Coined`; "(coined)" in Word history). Cultural
+items the table leaves out are unknown, as in generated languages. A UI
+choice is applied to the scenario's source (`scenario.WithLanguage`), so
+saves replay it. A test checks every listed form fits its own template:
+the engine's repair syllabifies medial s+stop as an onset, so PAN
+*kuSkuS and *sepsep were left out rather than "repaired" on first change.
+
+Simplifications: Latin and PIE fuse number and case; the engine has one
+exponent per slot, so endings are one representative each (Latin PL -s,
+GEN -is, DAT -iː; no accusative -m, which was already weak in speech, so
+nouns are given in their accusative stem: lupu, kane, nokte, the forms
+Romance continues). Ablaut, reduplication and PAN voice affixes are not
+modelled; PAN's *-in- perfective is a prefix *ni-.
+
+Four new starters use them: Latin after the empire (empire collapse in
+year 400), Out of the steppe (PIE herders over farmers), Out of Taiwan
+(PAN across an archipelago) and Germanic and Latin (two real families, a
+frontier crossing in 350 and a fall in 450).

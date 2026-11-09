@@ -51,12 +51,14 @@ type World struct {
 type Proto struct {
 	Template     string
 	Syllables    int32
-	FinalGlottal int32 // per mille
+	FinalGlottal int32  // per mille
+	Language     string // a real proto-language ("latin"); the others are then ignored
 }
 
 // Family is one language family's starting area.
 type Family struct {
-	Name   string // optional
+	Name     string // optional
+	Language string // a real proto-language for this family (overrides proto's)
 	Place  string // where its homeland is: homeland, centre, west, east, north, south, steppe, coast, fertile, or a hex number
 	Radius int32  // hexes settled around it at the start (default 1); "all" is -1
 }
@@ -93,8 +95,8 @@ var (
 	campKeys   = []string{"people", "income", "start", "goals"}
 	GoalKinds  = []string{"spoken", "unity", "tonal", "daughters", "survive"}
 	worldKeys  = []string{"width", "height", "land", "shape", "rivers"}
-	protoKeys  = []string{"template", "syllables", "final-glottal"}
-	familyKeys = []string{"name", "place", "radius"}
+	protoKeys  = []string{"template", "syllables", "final-glottal", "language"}
+	familyKeys = []string{"name", "place", "radius", "language"}
 	polityKeys = []string{"capital", "covers", "script", "standard", "seafaring"}
 	eventKeys  = []string{"tick", "year", "do", "polity", "place", "from", "what", "rule"}
 	Actions    = []string{"collapse", "plague", "famine", "migrate", "conquer", "script", "standard", "route", "invent", "seafaring", "rule"}
@@ -202,7 +204,7 @@ func Read(src string) (*Scenario, error) {
 		if err != nil {
 			return nil, err
 		}
-		sc.Proto = Proto{Template: str(p, "template"), Syllables: int32(syl), FinalGlottal: int32(fg)}
+		sc.Proto = Proto{Template: str(p, "template"), Syllables: int32(syl), FinalGlottal: int32(fg), Language: str(p, "language")}
 	}
 	fams, err := list(root, "families")
 	if err != nil {
@@ -216,7 +218,7 @@ func Read(src string) (*Scenario, error) {
 		if err != nil {
 			return nil, err
 		}
-		sc.Families = append(sc.Families, Family{Name: str(f, "name"), Place: str(f, "place"), Radius: int32(rad)})
+		sc.Families = append(sc.Families, Family{Name: str(f, "name"), Place: str(f, "place"), Radius: int32(rad), Language: str(f, "language")})
 	}
 	if c := root.Get("config"); c != nil {
 		if c.Kind != Map {

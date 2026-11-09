@@ -24,6 +24,8 @@ make build                     # bin/isogloss
 
 bin/isogloss run --seed 42 --ticks 40 --out run.json   # 1000 years; prints the tree
 bin/isogloss run --scenario empire-collapse            # a starter scenario (or a YAML file)
+bin/isogloss run --language latin                      # start from a real language (latin, pie,
+                                                       #   proto-germanic, proto-austronesian)
 bin/isogloss etym run.json water                       # trace 'water' in every language
 bin/isogloss etym run.json say --form PST.3SG          # trace an inflected form
 bin/isogloss grammar run.json                          # Markdown grammar sketches
@@ -45,7 +47,7 @@ cd web && npm run e2e          # browser smoke test against web/dist (cached Pla
 | `engine/rules` | The sound-change rule language: parser and applier |
 | `engine/tmpl` | ~70 sound-change templates instantiated per language |
 | `engine/morph` | Grammatical slots and stages, paradigm cells, word-order parameters (WALS priors) |
-| `engine/society`, `scenario` | Polities, routes, writing; scenario files and the five starters |
+| `engine/society`, `scenario` | Polities, routes, writing; scenario files and the eleven starters |
 | `engine/contact` | Nativizing loans, borrowability, substrate languages, place names |
 | `engine/lex`, `world`, `pop`, `history`, `sim` | Lexicon and paradigms, map, wave spread and clustering, innovations and traces, tick loop |
 | `engine/render` | JSON, etymologies, comparative tables, correspondences, grammar sketches, parallel text, CLDF |

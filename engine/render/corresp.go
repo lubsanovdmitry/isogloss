@@ -124,7 +124,7 @@ func Correspondences(s *sim.Sim, minCount int) (langs []string, out []Correspond
 func CorrespondencesJSON(s *sim.Sim, minCount int) []byte {
 	langs, cs := Correspondences(s, minCount)
 	var j JSON
-	j.Obj().KS("proto", s.ProtoName()).K("langs").Arr()
+	j.Obj().KS("proto", s.ProtoName()).KS("star", s.Star(0)).K("langs").Arr()
 	for _, l := range langs {
 		j.S(l)
 	}

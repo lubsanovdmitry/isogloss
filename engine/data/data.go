@@ -2,7 +2,11 @@
 // `make data`; see data/LICENSES.md for sources and licences.
 package data
 
-import _ "embed"
+import (
+	"embed"
+	"io/fs"
+	"strings"
+)
 
 // Segments: PHOIBLE segments with feature bits and frequency.
 //
@@ -38,6 +42,23 @@ var WALS string
 //
 //go:embed romance.tsv
 var Romance string
+
+//go:embed protos/*.tsv
+var protoFS embed.FS
+
+// Protos returns the real proto-language tables (protos/<id>.tsv), keyed
+// by ID. They are hand-written, not generated; see each file's header.
+func Protos() map[string]string {
+	out := map[string]string{}
+	ents, _ := fs.ReadDir(protoFS, "protos")
+	for _, e := range ents {
+		b, err := protoFS.ReadFile("protos/" + e.Name())
+		if err == nil {
+			out[strings.TrimSuffix(e.Name(), ".tsv")] = string(b)
+		}
+	}
+	return out
+}
 
 // Lines splits an embedded TSV table into fields, skipping blank lines and
 // '#' comments.

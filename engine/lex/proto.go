@@ -79,6 +79,12 @@ type Proto struct {
 	Consonants []phon.FeatureSet
 	freqOf     map[phon.FeatureSet]int
 	maxSyl     int
+	// Name and Real are set for a real-world proto-language ("Latin",
+	// "latin"); Coined marks the concepts its table had no form for (nil
+	// for generated languages, where every root is invented).
+	Name, Real string
+	Coined     []bool
+	Attested   bool // its forms are attested, not reconstructed (no asterisk)
 }
 
 // GenerateProto builds a proto-language: an inventory sampled from PHOIBLE
@@ -93,10 +99,22 @@ type ProtoOptions struct {
 	MaxSyllables int    // cap on syllables per root
 	FinalGlottal uint32 // per-mille of roots that end in a glottal stop
 	Family       uint8  // family index: roots are FamilyRoot(Family, concept)
+	// Language is a shipped real proto-language (RealProtos) to start from
+	// instead of a generated one; the other options are then ignored.
+	Language string
 }
 
-// GenerateProtoWith is GenerateProto under constraints.
+// GenerateProtoWith is GenerateProto under constraints. It panics on an
+// unknown Language (check with RealByID first).
 func GenerateProtoWith(r *rng.Stream, opt ProtoOptions) *Proto {
+	if opt.Language != "" {
+		realOnce.Do(loadReal)
+		sp, ok := realSpecs[opt.Language]
+		if !ok {
+			panic("lex: unknown proto-language " + opt.Language)
+		}
+		return realProto(r, opt, sp)
+	}
 	vpool, cpool := pools()
 	p := &Proto{freqOf: map[phon.FeatureSet]int{}}
 	taken := map[phon.FeatureSet]bool{}

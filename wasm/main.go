@@ -208,11 +208,21 @@ func handle(cmd js.Value) string {
 			return errJSON(err)
 		}
 		var sc *scenario.Scenario
+		src := ""
 		if id := str(cmd, "scenario"); id != "" {
-			src := str(cmd, "source")
+			src = str(cmd, "source")
 			if st, ok := scenario.StarterByID(id); ok && src == "" {
 				src = st.Src
 			}
+		}
+		if lang := str(cmd, "language"); lang != "" {
+			info, ok := lex.RealByID(lang)
+			if !ok {
+				return errJSON("unknown proto-language " + lang)
+			}
+			src = scenario.WithLanguage(src, lang, info.Name, info.Summary)
+		}
+		if src != "" {
 			var e error
 			if sc, e = scenario.Read(src); e != nil {
 				return errJSON(e.Error())
@@ -326,6 +336,9 @@ func query(q js.Value, s *sim.Sim) string {
 	}
 	if kind == "scenarios" {
 		return string(render.ScenariosJSON())
+	}
+	if kind == "languages" {
+		return string(render.LanguagesJSON())
 	}
 	if s == nil {
 		return errJSON("no run")
