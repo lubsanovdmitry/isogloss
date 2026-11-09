@@ -11,6 +11,7 @@
 //	intervene{rule, hex}                 schedule a rule for the next tick
 //	query    {kind, ...}                 compare | corresp | intel | lang | sketch | paradigm | cell | fable | word | innov | innovs | preview | suggest | structure | dialectmap | dialects | frames | concepts | labels | place
 //	save                                 returns the save (seed, tick, interventions)
+//	cancel   {idx}                       drop a queued intervention (query pending lists them)
 //	load     {save}                      replay a save
 //	view     {tick}                      look at the run as it was at tick (-1: live); queries follow
 //	fork     {tick}                      continue from tick, dropping later player actions
@@ -246,6 +247,11 @@ func handle(cmd js.Value) string {
 		return `{"ok":true,"tick":` + strconv.Itoa(int(cur.Tick+1)) + `}`
 	case "save":
 		return saveJSON(cur.SaveState())
+	case "cancel":
+		if err := cur.Cancel(num(cmd, "idx", -1)); err != nil {
+			return errJSON(err.Error())
+		}
+		return `{"ok":true}`
 	case "annotate":
 		cur.Annotate(str(cmd, "key"), str(cmd, "value"))
 		return `{"ok":true}`
@@ -353,6 +359,8 @@ func query(q js.Value, s *sim.Sim) string {
 		return string(render.DialectMapJSON(s, c))
 	case "dialects":
 		return string(render.DialectTableJSON(s, int32(num(q, "lang", -1)), q.Get("core").Truthy()))
+	case "pending":
+		return string(render.PendingJSON(cur))
 	case "structure":
 		return string(render.StructureJSON(s, int32(num(q, "hex", -1))))
 	case "suggest":

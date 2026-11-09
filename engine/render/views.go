@@ -643,6 +643,69 @@ func StructureJSON(s *sim.Sim, hex int32) []byte {
 	return j.Bytes()
 }
 
+// PendingJSON lists the player's queued interventions, each described.
+func PendingJSON(s *sim.Sim) []byte {
+	var j JSON
+	j.Arr()
+	idx, ivs := s.Pending()
+	for k, iv := range ivs {
+		j.Obj().KI("idx", int64(idx[k])).KI("tick", int64(iv.Tick)).KS("kind", iv.Kind).KI("hex", int64(iv.Hex)).KS("text", describe(s, iv)).End()
+	}
+	j.EndArr()
+	return j.Bytes()
+}
+
+// describe says what an intervention will do.
+func describe(s *sim.Sim, iv sim.Intervention) string {
+	where := " everywhere"
+	if iv.Hex >= 0 {
+		where = " starting in hex " + strconv.Itoa(int(iv.Hex))
+	}
+	polity := func() string {
+		if iv.Polity >= 0 && int(iv.Polity) < len(s.Polities) {
+			return s.Polities[iv.Polity].Name
+		}
+		return "the polity"
+	}
+	switch iv.Kind {
+	case "rule":
+		name := strings.TrimSuffix(strings.TrimPrefix(strings.SplitN(iv.Rule, "\n", 2)[0], "rule "), ":")
+		if i := strings.IndexAny(name, " :"); i > 0 {
+			name = name[:i]
+		}
+		return "sound change " + name + where
+	case "gram":
+		if f := strings.Fields(iv.Rule); len(f) == 2 && f[1] == "+" {
+			return "push the " + f[0] + " construction a stage further" + where
+		} else if len(f) == 2 {
+			return "a " + f[0] + " construction from ‘" + f[1] + "’" + where
+		}
+	case "order":
+		return strings.Replace(iv.Rule, "=", " becomes ", 1) + where
+	case "syllables":
+		return map[string]string{"onset+1": "longer onsets", "onset-1": "shorter onsets", "coda+1": "longer codas", "coda-1": "shorter codas"}[iv.Rule] + where
+	case "plague", "famine":
+		return iv.Kind + where
+	case "invent":
+		return "‘" + iv.Rule + "’ appears" + where
+	case "collapse":
+		return polity() + " breaks up"
+	case "script":
+		return polity() + " starts writing"
+	case "standard":
+		return polity() + " fixes a standard"
+	case "seafaring":
+		return polity() + " takes to the sea"
+	case "encourage", "suppress":
+		if iv.Innov > 0 && int(iv.Innov) <= len(s.Reg.All) {
+			return iv.Kind + " ‘" + s.Reg.Get(iv.Innov).Label() + "’"
+		}
+	case "expand":
+		return "expand into hex " + strconv.Itoa(int(iv.Hex))
+	}
+	return iv.Kind + where
+}
+
 // SuggestJSON lists sound changes the engine finds plausible at a hex.
 func SuggestJSON(s *sim.Sim, hex int32, n int, salt uint64) []byte {
 	var j JSON

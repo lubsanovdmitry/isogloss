@@ -94,3 +94,45 @@ func TestStructuralInterventions(t *testing.T) {
 		t.Error("unknown syllable change accepted")
 	}
 }
+
+// TestQueue: several interventions queue for the same generation, can be
+// cancelled before it, and all the rest apply.
+func TestQueue(t *testing.T) {
+	s := New(42, DefaultConfig())
+	s.Run(3)
+	for _, iv := range []Intervention{
+		{Kind: "rule", Hex: -1, Rule: "rule one:\n    p => f\n"},
+		{Kind: "rule", Hex: -1, Rule: "rule two:\n    t => θ\n"},
+		{Kind: "order", Hex: -1, Rule: "clause order=VSO"},
+	} {
+		if err := s.Intervene(iv); err != nil {
+			t.Fatal(err)
+		}
+	}
+	idx, ivs := s.Pending()
+	if len(ivs) != 3 {
+		t.Fatalf("%d queued, want 3", len(ivs))
+	}
+	if err := s.Cancel(idx[1]); err != nil {
+		t.Fatal(err)
+	}
+	if _, ivs = s.Pending(); len(ivs) != 2 || ivs[1].Kind != "order" {
+		t.Fatalf("after cancel: %+v", ivs)
+	}
+	s.Step()
+	forced := map[string]bool{}
+	for _, e := range s.Log {
+		if e.Kind == "intervention" && e.Tick == s.Tick {
+			forced[e.Text] = true
+		}
+	}
+	if !forced["forced change one"] || forced["forced change two"] || !forced["forced: clause order becomes VSO"] {
+		t.Errorf("applied: %v", forced)
+	}
+	if _, ivs = s.Pending(); len(ivs) != 0 {
+		t.Errorf("still pending after the generation: %d", len(ivs))
+	}
+	if s.Cancel(0) == nil {
+		t.Error("cancelled an applied intervention")
+	}
+}

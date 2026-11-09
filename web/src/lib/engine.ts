@@ -40,6 +40,7 @@ export interface Writing {
   examples: { concept: string; spelling: string; form: string; now: string; gap: number }[];
 }
 export interface Stratum { kind: 'loan' | 'substrate' | 'learned'; donor: string; count: number; first: number; last: number; examples: string[] }
+export interface Pending { idx: number; tick: number; kind: string; hex: number; text: string }
 export interface MapLabel { hex: number; name: string; short: string; capital: boolean }
 export interface Place {
   original: string; originalName: string; gloss: string; namedBy: string; substrate: boolean; shortened?: boolean;

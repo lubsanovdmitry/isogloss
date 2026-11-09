@@ -326,3 +326,24 @@ func (s *Sim) Digest() uint64 {
 	mix(uint64(len(s.Reg.All)))
 	return h
 }
+
+// Pending lists the player's interventions not yet applied (scheduled for
+// a later tick), with their positions in Interventions for Cancel.
+func (s *Sim) Pending() (idx []int, ivs []Intervention) {
+	for i, iv := range s.Interventions {
+		if iv.Tick > s.Tick && !iv.Scripted {
+			idx = append(idx, i)
+			ivs = append(ivs, iv)
+		}
+	}
+	return idx, ivs
+}
+
+// Cancel removes a pending player intervention by its position.
+func (s *Sim) Cancel(i int) error {
+	if i < 0 || i >= len(s.Interventions) || s.Interventions[i].Tick <= s.Tick || s.Interventions[i].Scripted {
+		return errors.New("sim: nothing to cancel there")
+	}
+	s.Interventions = slices.Delete(s.Interventions, i, i+1)
+	return nil
+}

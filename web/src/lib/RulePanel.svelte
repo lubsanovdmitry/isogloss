@@ -1,12 +1,13 @@
 <script lang="ts">
-  import type { Engine } from './engine';
+  import type { Engine, Pending } from './engine';
   import StructurePanel from './StructurePanel.svelte';
 
   interface Props {
     engine: Engine; hex: number; tick: number; onscheduled: (msg: string) => void;
+    pending: Pending[]; oncancel: (idx: number) => void;
     polity?: { id: number; name: string } | null; // the selected hex's polity
   }
-  let { engine, hex, tick, onscheduled, polity = null }: Props = $props();
+  let { engine, hex, tick, onscheduled, pending, oncancel, polity = null }: Props = $props();
   let thing = $state('wine');
   let script = $state('alphabet');
 
@@ -54,6 +55,16 @@
     if (hex !== suggestedFor) suggestions = null;
   });
 
+  async function queue(sg: Suggestion) {
+    error = '';
+    try {
+      const r = await engine.call<{ tick: number }>('intervene', { rule: sg.rule, hex });
+      onscheduled(`Queued ${sg.name.replaceAll('-', ' ')} in hex ${hex} for generation ${r.tick}.`);
+    } catch (e: any) {
+      error = e.message ?? String(e);
+    }
+  }
+
   function use(sg: Suggestion) {
     src = sg.rule.trimEnd();
     doPreview();
@@ -70,6 +81,21 @@
   }
 </script>
 
+{#if pending.length}
+  <section class="queue" aria-label="Queued changes">
+    <h3 class="q">Queued for the next generation{pending.some((p) => p.tick > tick + 1) ? 's' : ''}</h3>
+    <ul>
+      {#each pending as p (p.idx)}
+        <li>
+          <span>{p.text}{p.tick > tick + 1 ? ` (generation ${p.tick})` : ''}</span>
+          <button class="x" onclick={() => oncancel(p.idx)} aria-label="Cancel {p.text}" title="Cancel">✕</button>
+        </li>
+      {/each}
+    </ul>
+    <p class="hint">All of these happen together when you press Next generation (or Run).</p>
+  </section>
+{/if}
+
 <div class="actions">
   <button onclick={() => suggest()} disabled={hex < 0}>Suggest changes here</button>
   {#if suggestions}<button onclick={() => suggest(true)}>Other suggestions</button>{/if}
@@ -85,7 +111,8 @@
           <div class="sg-head">
             <strong>{sg.name.replaceAll('-', ' ')}</strong> <span class="fam">{sg.family}</span>
             <span class="cnt">{sg.count} {sg.count === 1 ? 'word' : 'words'}</span>
-            <button class="use" onclick={() => use(sg)}>Use</button>
+            <button class="use" onclick={() => use(sg)} title="Load it into the editor below">Use</button>
+            <button onclick={() => queue(sg)} title="Start it in this hex at the next generation">Queue</button>
           </div>
           <div class="ex">
             {#each sg.examples as e (e.concept)}<span><span class="c">{e.concept}</span> <span class="ipa">{e.before} → {e.after}</span></span>{/each}
@@ -156,11 +183,17 @@ stress:1  tone:rise  phon:breathy   prosody`}</pre>
 {/if}
 
 <style>
+  .queue { border: 1px solid var(--rule); border-radius: 4px; padding: 0.4rem 0.7rem; margin-bottom: 0.8rem; background: var(--paper-raised); }
+  h3.q { font-family: var(--serif); font-size: var(--t-md); margin: 0 0 0.2rem; }
+  .queue ul { list-style: none; padding: 0; margin: 0; }
+  .queue li { display: flex; justify-content: space-between; gap: 0.6rem; align-items: center; padding: 0.15rem 0; border-bottom: 1px solid var(--rule-faint); font-size: var(--t-sm); }
+  .queue .x { padding: 0 0.45rem; line-height: 1.4; }
   .sugg { list-style: none; padding: 0; margin: 0.3rem 0 1rem; }
   .sugg li { padding: 0.35rem 0; border-bottom: 1px solid var(--rule-faint); }
   .sg-head { display: flex; gap: 0.5rem; align-items: baseline; flex-wrap: wrap; }
   .sg-head .fam, .sg-head .cnt { color: var(--ink-soft); font-size: var(--t-sm); }
-  .sg-head .use { margin-left: auto; padding: 0.1rem 0.6rem; }
+  .sg-head .use { margin-left: auto; }
+  .sg-head button { padding: 0.1rem 0.6rem; }
   .ex { display: flex; flex-wrap: wrap; gap: 0.2rem 1rem; font-size: var(--t-sm); margin-top: 0.15rem; }
   .ex .c { color: var(--ink-soft); }
   h3.ev { font-family: var(--serif); font-weight: 700; font-size: var(--t-lg); margin: 1.4rem 0 0.2rem; }

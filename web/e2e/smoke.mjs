@@ -120,6 +120,16 @@ if (cap) {
   await page.waitForSelector('ul.pv li', { timeout: 30000 });
   const src = await page.locator('textarea').inputValue();
   check(src.startsWith('rule ') && (await page.locator('ul.pv li').count()) > 0, `a suggestion loads and previews: ${src.split('\n')[0]}`);
+  // Queue two suggestions for the same generation, cancel one.
+  await page.locator('ul.sugg li').nth(0).getByRole('button', { name: 'Queue' }).click();
+  await page.locator('ul.sugg li').nth(1).getByRole('button', { name: 'Queue' }).click();
+  await page.waitForFunction(() => document.querySelectorAll('.queue li').length === 2, null, { timeout: 30000 });
+  const next = (await page.getByRole('button', { name: /^Next generation/ }).textContent())?.trim();
+  check(next === 'Next generation (2 queued)', `two changes queued together (${next})`);
+  await page.locator('.queue li').nth(1).getByRole('button', { name: /^Cancel/ }).click();
+  await page.waitForFunction(() => document.querySelectorAll('.queue li').length === 1, null, { timeout: 30000 });
+  check(true, 'a queued change cancelled');
+
   // Structural interventions: set the word order, shorten codas.
   await page.locator('select[aria-label="Word-order parameter"]').selectOption('clause order');
   const now = (await page.locator('.row .now').nth(1).textContent()) ?? '';

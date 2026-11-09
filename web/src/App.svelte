@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Engine, type MapLabel, type Concept, type Event, type Frame, type InnovInfo, type InnovSummary, type Snapshot, type TreeNode, type World, type ScenarioEntry } from './lib/engine';
+  import { Engine, type Pending, type MapLabel, type Concept, type Event, type Frame, type InnovInfo, type InnovSummary, type Snapshot, type TreeNode, type World, type ScenarioEntry } from './lib/engine';
   import Atlas from './lib/Atlas.svelte';
   import TreeItem from './lib/TreeItem.svelte';
   import WordPanel from './lib/WordPanel.svelte';
@@ -136,7 +136,22 @@
     status = '';
   }
 
+  // Interventions queued for coming generations (the engine applies them all).
+  let pending = $state<Pending[]>([]);
+  async function refreshPending() {
+    pending = await engine.query<Pending[]>('pending').catch(() => []);
+  }
+  function scheduled(msg: string) {
+    status = msg;
+    refreshPending();
+  }
+  async function cancelPending(idx: number) {
+    await engine.call('cancel', { idx }).catch((e) => (status = e.message ?? String(e)));
+    await refreshPending();
+  }
+
   async function refreshSide() {
+    await refreshPending();
     innovs = (await engine.query<InnovSummary[]>('innovs', { min: 4 })).slice(0, 60);
     frames = await engine.query<Frame[]>('frames');
     await refreshLabels();
@@ -322,7 +337,7 @@
     <button onclick={() => (showSettings = !showSettings)} aria-expanded={showSettings}>Settings{Object.keys(cfg).length ? ` (${Object.keys(cfg).length} changed)` : ''}</button>
     <button onclick={newRun} disabled={busy && !running}>New world</button>
     <span class="sep"></span>
-    <button onclick={() => step(1)} disabled={busy || running}>Next generation</button>
+    <button onclick={() => step(1)} disabled={busy || running}>Next generation{pending.length ? ` (${pending.length} queued)` : ''}</button>
     <button onclick={() => step(4)} disabled={busy || running}>+100 years</button>
     <button class="primary" onclick={play} aria-pressed={running}>{running ? 'Pause' : 'Run'}</button>
     <label class="speed">Speed
@@ -416,7 +431,7 @@
     <div class="panel" role="tabpanel">
       {#if snap && shown}
         {#if tab === 'campaign'}
-          <CampaignPanel {engine} tick={shown.tick} hex={selected} onscheduled={(m) => (status = m)} oninnov={showInnov} />
+          <CampaignPanel {engine} tick={shown.tick} hex={selected} onscheduled={scheduled} oninnov={showInnov} />
         {:else if tab === 'stories'}
           {#await import('./lib/StoryPanel.svelte') then { default: StoryPanel }}
             <StoryPanel {engine} seed={snap.seed} tick={shown.tick} langs={living} polities={shown.polities.filter((p) => p.fell < 0)} />
@@ -440,7 +455,7 @@
         {:else if tab === 'fable'}
           <FablePanel {engine} tick={shown.tick} onlang={(id) => { focusLang = id; tab = 'lang'; }} />
         {:else if tab === 'rules'}
-          <RulePanel {engine} hex={selected} tick={shown.tick} polity={selPolity} onscheduled={(m) => (status = m)} />
+          <RulePanel {engine} hex={selected} tick={shown.tick} polity={selPolity} onscheduled={scheduled} {pending} oncancel={cancelPending} />
         {:else}
           <Chronicle events={past ? events.filter((e) => e.tick <= past!.tick) : events} oninnov={showInnov} onhex={select} />
         {/if}
