@@ -104,6 +104,26 @@ check(labels >= 5, `place names on the map (${labels})`);
 const long = await page.locator('svg text.place').evaluateAll((ts) => ts.filter((t) => [...(t.lastChild?.textContent ?? '').trim()].length > 10).length);
 check(long === 0, 'map labels are at most ten letters');
 
+// ---- Sound-change suggestions for a settled hex (a capital's).
+const cap = await page.locator('svg circle.capital').first().boundingBox();
+if (cap) {
+  // Rivers, borders and labels must not swallow clicks on the hex below.
+  const hit = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.tagName, [cap.x + cap.width / 2, cap.y + cap.height / 2]);
+  check(hit === 'polygon', `a click on a capital reaches its hex (${hit})`);
+  await page.mouse.click(cap.x + cap.width / 2, cap.y + cap.height / 2);
+  await page.getByRole('tab', { name: 'Change rules' }).click();
+  await page.getByRole('button', { name: 'Suggest changes here' }).click();
+  await page.waitForSelector('ul.sugg li', { timeout: 30000 });
+  const n = await page.locator('ul.sugg li').count();
+  check(n >= 3, `sound changes suggested (${n})`);
+  await page.locator('ul.sugg button.use').first().click();
+  await page.waitForSelector('ul.pv li', { timeout: 30000 });
+  const src = await page.locator('textarea').inputValue();
+  check(src.startsWith('rule ') && (await page.locator('ul.pv li').count()) > 0, `a suggestion loads and previews: ${src.split('\n')[0]}`);
+} else {
+  console.log('skip no capital yet');
+}
+
 // ---- Look back: drag to an early frame, release, panels show that moment.
 const slider = page.locator('input[aria-label="Show the language map at an earlier time"]');
 await slider.evaluate((el) => {

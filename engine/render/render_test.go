@@ -154,3 +154,31 @@ func TestLabelsSpreadOut(t *testing.T) {
 		}
 	}
 }
+
+// TestSuggestions: offered sound changes compile, change words, and
+// asking for them leaves the run untouched.
+func TestSuggestions(t *testing.T) {
+	s := sim.New(42, sim.DefaultConfig())
+	s.Run(10)
+	d := s.Digest()
+	h := s.Communities()[0].Hex
+	sgs := s.SuggestSounds(h, 8, 0)
+	if len(sgs) < 4 {
+		t.Fatalf("only %d suggestions", len(sgs))
+	}
+	for i, sg := range sgs {
+		if sg.Count == 0 || len(sg.Examples) == 0 {
+			t.Errorf("%s changes nothing", sg.Name)
+		}
+		if i > 0 && sg.Score > sgs[i-1].Score {
+			t.Error("not sorted best first")
+		}
+		if err := s.Intervene(sim.Intervention{Kind: "rule", Hex: h, Rule: sg.Src}); err != nil {
+			t.Errorf("%s does not compile: %v", sg.Name, err)
+		}
+	}
+	valid(t, "suggest", SuggestJSON(s, h, 8, 1))
+	if s.Digest() != d {
+		t.Error("suggesting changed the run")
+	}
+}

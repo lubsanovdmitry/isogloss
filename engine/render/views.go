@@ -606,6 +606,24 @@ func PreviewJSON(s *sim.Sim, hex int32, src string) []byte {
 	return j.Bytes()
 }
 
+// SuggestJSON lists sound changes the engine finds plausible at a hex.
+func SuggestJSON(s *sim.Sim, hex int32, n int, salt uint64) []byte {
+	var j JSON
+	if hex < 0 || int(hex) >= len(s.ByHex) || s.ByHex[hex] == nil {
+		return j.Obj().KS("error", "hex is not settled").End().Bytes()
+	}
+	j.Arr()
+	for _, sg := range s.SuggestSounds(hex, n, salt) {
+		j.Obj().KS("name", sg.Name).KS("family", sg.Family).KS("rule", sg.Src).KI("score", int64(sg.Score)).KI("count", int64(sg.Count)).K("examples").Arr()
+		for _, e := range sg.Examples {
+			j.Obj().KS("concept", e.Concept).KS("before", e.Before).KS("after", e.After).End()
+		}
+		j.EndArr().End()
+	}
+	j.EndArr()
+	return j.Bytes()
+}
+
 // ConceptsJSON lists concepts.
 func ConceptsJSON() []byte {
 	var j JSON

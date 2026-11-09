@@ -33,6 +33,31 @@
       error = e.message ?? String(e);
     }
   }
+  interface Suggestion { name: string; family: string; rule: string; score: number; count: number; examples: { concept: string; before: string; after: string }[] }
+  let suggestions = $state<Suggestion[] | null>(null);
+  let salt = $state(0);
+  let suggestedFor = $state(-1);
+
+  async function suggest(again = false) {
+    error = '';
+    if (again) salt++;
+    try {
+      suggestions = await engine.query<Suggestion[]>('suggest', { hex, n: 8, salt });
+      suggestedFor = hex;
+    } catch (e: any) {
+      error = e.message ?? String(e);
+    }
+  }
+  // A different hex has different sounds: drop stale suggestions.
+  $effect(() => {
+    if (hex !== suggestedFor) suggestions = null;
+  });
+
+  function use(sg: Suggestion) {
+    src = sg.rule.trimEnd();
+    doPreview();
+  }
+
   async function inject(where: number) {
     error = '';
     try {
@@ -43,6 +68,32 @@
     }
   }
 </script>
+
+<div class="actions">
+  <button onclick={() => suggest()} disabled={hex < 0}>Suggest changes here</button>
+  {#if suggestions}<button onclick={() => suggest(true)}>Other suggestions</button>{/if}
+</div>
+{#if suggestions}
+  {#if suggestions.length === 0}
+    <p class="hint">No sound change fits this community's sounds right now.</p>
+  {:else}
+    <p class="hint">Changes the simulation itself would find plausible here, best first. Use one to load it into the editor below.</p>
+    <ul class="sugg">
+      {#each suggestions as sg (sg.rule)}
+        <li>
+          <div class="sg-head">
+            <strong>{sg.name.replaceAll('-', ' ')}</strong> <span class="fam">{sg.family}</span>
+            <span class="cnt">{sg.count} {sg.count === 1 ? 'word' : 'words'}</span>
+            <button class="use" onclick={() => use(sg)}>Use</button>
+          </div>
+          <div class="ex">
+            {#each sg.examples as e (e.concept)}<span><span class="c">{e.concept}</span> <span class="ipa">{e.before} → {e.after}</span></span>{/each}
+          </div>
+        </li>
+      {/each}
+    </ul>
+  {/if}
+{/if}
 
 <p class="hint">
   Write a sound change in Isogloss rule syntax. Classes <code>C V stop affr fric obs nasal liquid glide son sib</code> are predefined.
@@ -102,6 +153,13 @@ stress:1  tone:rise  phon:breathy   prosody`}</pre>
 {/if}
 
 <style>
+  .sugg { list-style: none; padding: 0; margin: 0.3rem 0 1rem; }
+  .sugg li { padding: 0.35rem 0; border-bottom: 1px solid var(--rule-faint); }
+  .sg-head { display: flex; gap: 0.5rem; align-items: baseline; flex-wrap: wrap; }
+  .sg-head .fam, .sg-head .cnt { color: var(--ink-soft); font-size: var(--t-sm); }
+  .sg-head .use { margin-left: auto; padding: 0.1rem 0.6rem; }
+  .ex { display: flex; flex-wrap: wrap; gap: 0.2rem 1rem; font-size: var(--t-sm); margin-top: 0.15rem; }
+  .ex .c { color: var(--ink-soft); }
   h3.ev { font-family: var(--serif); font-weight: 700; font-size: var(--t-lg); margin: 1.4rem 0 0.2rem; }
   .inl { display: inline-flex; gap: 0.3rem; align-items: center; font-size: var(--t-sm); color: var(--ink-soft); }
   textarea { width: 100%; font-family: var(--serif); font-size: var(--t-lg); line-height: 1.4; }

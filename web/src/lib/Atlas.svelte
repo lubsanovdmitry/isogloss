@@ -185,10 +185,10 @@
   polygon { stroke: none; }
   polygon.land { cursor: pointer; stroke: var(--paper); stroke-width: 0.6; }
   polygon.mountain { stroke-dasharray: 1.5 1.5; stroke: var(--rule); }
-  .river { stroke: var(--river); stroke-width: 1.8; fill: none; stroke-linecap: round; opacity: 0.85; }
-  .coast { stroke: var(--rule); stroke-width: 1; fill: none; }
-  .border { stroke: var(--ink); stroke-width: 1.6; fill: none; stroke-linecap: round; }
-  .iso { stroke: var(--isogloss); stroke-width: 3; fill: none; stroke-linecap: round; }
+  .river { stroke: var(--river); stroke-width: 1.8; fill: none; stroke-linecap: round; opacity: 0.85; pointer-events: none; }
+  .coast { stroke: var(--rule); stroke-width: 1; fill: none; pointer-events: none; }
+  .border { stroke: var(--ink); stroke-width: 1.6; fill: none; stroke-linecap: round; pointer-events: none; }
+  .iso { stroke: var(--isogloss); stroke-width: 3; fill: none; stroke-linecap: round; pointer-events: none; }
   .wave { fill: var(--isogloss); pointer-events: none; }
   .wave.done { fill: url(#hatch); }
   .sel { fill: none; stroke: var(--ink); stroke-width: 2.5; pointer-events: none; }
