@@ -107,6 +107,6 @@ export class Engine {
   }
 
   query<T = any>(kind: string, args: Record<string, unknown> = {}): Promise<T> {
-    return this.call<T>('query', { kind, ...args });
+    return this.call<T>('query', { ...args, kind }); // args never rename the query
   }
 }

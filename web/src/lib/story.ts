@@ -66,7 +66,7 @@ export async function nameAll(
   const todo: { id: number; cands: Candidate[] }[] = [];
   for (const it of items) {
     if (notes.has(key(seed, `name/${kind}/${it.id}`))) continue;
-    const cands = await engine.query<Candidate[]>('namecands', { kind, id: it.id });
+    const cands = await engine.query<Candidate[]>('namecands', { of: kind, id: it.id });
     if (cands.length) todo.push({ id: it.id, cands });
   }
   if (!todo.length) return 0;

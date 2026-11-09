@@ -22,8 +22,11 @@ var gramRatePer100k = [...]int{
 
 // Analogical levelling per 100 000 community-ticks for an irregular
 // paradigm, by frequency class: rare words are regularized, frequent ones
-// keep their irregular forms (Bybee; Lieberman et al. 2007).
-var analogyRatePer100k = [6]int{0, 30, 200, 1500, 5000, 10000}
+// keep their irregular forms (Bybee; Lieberman et al. 2007). Lieberman et
+// al. find the rate ∝ frequency^-1/2; frequency classes are about ten times
+// apart, so each class levels about √10 ≈ 3.2 times faster than the one
+// above it.
+var analogyRatePer100k = [6]int{0, 30, 100, 300, 1000, 3000}
 
 // orderRatePer100k: word-order changes proposed per 100 000 community-ticks.
 const orderRatePer100k = 80

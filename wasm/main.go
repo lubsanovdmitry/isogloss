@@ -322,7 +322,7 @@ func query(q js.Value, s *sim.Sim) string {
 		return string(render.FramesJSON(cur))
 	case "namecands":
 		id := int32(num(q, "id", -1))
-		if str(q, "kind") == "polity" {
+		if str(q, "of") == "polity" { // not "kind": that names the query
 			return string(render.CandidatesJSON(render.PolityNameCandidates(s, id)))
 		}
 		return string(render.CandidatesJSON(render.LangNameCandidates(s, id)))

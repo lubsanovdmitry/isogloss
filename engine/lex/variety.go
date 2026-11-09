@@ -121,6 +121,7 @@ type Variety struct {
 	counts []segCount        // phoneme occurrence counts, sorted by features
 	inv    []phon.FeatureSet // cached inventory
 	prod   [2][]prodPattern  // cached productive affixes per part of speech
+	prodH  [2]uint64         // hash of prod (0: not computed)
 	press  *Pressure         // cached lexical pressures (clashes, competitors, gaps)
 }
 
@@ -138,6 +139,7 @@ func (v *Variety) Derive(e Entry) *Variety {
 		Epenth:   v.Epenth,
 		M:        v.M.Clone(),
 		prod:     v.prod, // valid until a paradigm changes (SetPara)
+		prodH:    v.prodH,
 		Vacated:  v.Vacated,
 		VacTick:  v.VacTick,
 		counts:   slices.Clone(v.counts),

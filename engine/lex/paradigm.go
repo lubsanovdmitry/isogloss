@@ -1,6 +1,7 @@
 package lex
 
 import (
+	"slices"
 	"sync"
 
 	"isogloss/engine/morph"
@@ -113,6 +114,7 @@ type prodPattern struct {
 func (v *Variety) SetPara(i int, p *morph.Paradigm) {
 	v.M.Para[i] = p
 	v.prod[Tracked()[i].POS] = nil
+	v.prodH[Tracked()[i].POS] = 0
 }
 
 // Productive returns the affixes of cell k with the highest type frequency
@@ -191,9 +193,13 @@ func rangeHash(w *phon.Word, a, b int) uint64 {
 // RegularForms builds every cell of a paradigm from a stem and the
 // productive affixes.
 func (v *Variety) RegularForms(pos morph.POS, stem phon.Word) []phon.Word {
+	st := phon.Word{Segs: stem.Segs, Bounds: stem.Bounds}
+	key := [3]uint64{v.prodHash(pos), FormHash(st), v.finishHash()}
+	if out, ok := regMemo.get(key); ok {
+		return slices.Clone(out)
+	}
 	cells := morph.Cells(pos)
 	out := make([]phon.Word, len(cells))
-	st := phon.Word{Segs: stem.Segs, Bounds: stem.Bounds}
 	for k := range cells {
 		pre, suf, ok := v.Productive(pos, k)
 		if !ok {
@@ -202,7 +208,70 @@ func (v *Variety) RegularForms(pos morph.POS, stem phon.Word) []phon.Word {
 		}
 		out[k] = v.Finish(morph.Join(pre, st, suf))
 	}
-	return out
+	regMemo.put(key, out)
+	return slices.Clone(out)
+}
+
+// regMemo remembers RegularForms results. They depend only on the
+// productive patterns, the stem and the variety's phonology (the key), and
+// neighbouring varieties share all three, so analogy spreading through
+// them rebuilds the same paradigms. Forms are never modified once built.
+var regMemo = memoForms{m: map[[3]uint64][]phon.Word{}}
+
+type memoForms struct {
+	mu sync.Mutex
+	m  map[[3]uint64][]phon.Word
+}
+
+func (c *memoForms) get(k [3]uint64) ([]phon.Word, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	f, ok := c.m[k]
+	return f, ok
+}
+
+func (c *memoForms) put(k [3]uint64, f []phon.Word) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.m) >= 50_000 {
+		clear(c.m) // only a cache
+	}
+	c.m[k] = f
+}
+
+// prodHash hashes the productive patterns of a part of speech (cached).
+func (v *Variety) prodHash(pos morph.POS) uint64 {
+	if v.prodH[pos] != 0 {
+		return v.prodH[pos]
+	}
+	v.Productive(pos, 0)
+	h := uint64(0x84222325cbf29ce4) ^ uint64(pos)
+	for _, p := range v.prod[pos] {
+		if !p.ok {
+			h = mix(h, 1)
+			continue
+		}
+		h = mix(mix(h, FormHash(p.pre)), FormHash(p.suf))
+	}
+	v.prodH[pos] = h | 1
+	return v.prodH[pos]
+}
+
+// finishHash hashes what Finish depends on: phonotactics, stress rule,
+// repair strategy and epenthetic segment.
+func (v *Variety) finishHash() uint64 {
+	t := v.Phonotax.Template
+	h := mix(uint64(t.MinOnset)|uint64(t.MaxOnset)<<8|uint64(t.MinCoda)<<16|uint64(t.MaxCoda)<<24, uint64(v.Stress)<<8|uint64(v.Repair))
+	if t.LongV {
+		h = mix(h, 3)
+	}
+	if v.Phonotax.SClusters {
+		h = mix(h, 5)
+	}
+	for _, b := range v.Phonotax.Banned {
+		h = mix(mix(mix(mix(h, b[0].Val), b[0].Mask), b[1].Val), b[1].Mask)
+	}
+	return mix(mix(mix(h, v.Epenth.F.Val), v.Epenth.F.Mask), uint64(v.Epenth.Tone))
 }
 
 // BaseStem is the stem of tracked lexeme i's base cell, which analogy
