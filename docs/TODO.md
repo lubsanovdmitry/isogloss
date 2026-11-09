@@ -1,8 +1,9 @@
 # What remains
 
-Status as of 2026-11-08: **M0–M5 are done** (gates met; see
-[IMPLEMENTATION.md](IMPLEMENTATION.md)). This list is ordered by when it is
-needed.
+Status as of 2026-11-09: **M0–M5 are done** (gates met; see
+[IMPLEMENTATION.md](IMPLEMENTATION.md)), and the follow-ups below are done
+except pushing to a remote and the module path. This list is ordered by when
+it is needed.
 
 ## M1 follow-ups (small, worth doing before M2)
 
@@ -11,11 +12,11 @@ needed.
 - [x] List regular sound correspondences in the comparative table (Word lists → Sound correspondences; `render.Correspondences`).
 - [x] Isogloss overlay shows the live wave level, plus an adoption-over-time chart (`Innovation.Curve`).
 - [x] Intelligibility heatmap view (Intelligibility tab; `render.IntelJSON`).
-- [ ] Timeline: snapshots every N ticks for fast scrubbing. Today "look back" shows language maps only, and forking replays from tick 0.
-- [ ] Concept frequency classes/stability are hand-curated for ~120 concepts; the rest use defaults. Review `cmd/datagen/concepts_meta.tsv`.
+- [x] Timeline: `sim.Timeline` keeps clones (every 4 generations, thinned to at most ten); looking back shows every panel as it was, and forking continues from a snapshot. Forks keep a scenario's own later events.
+- [x] Concept frequency classes/stability: all of Swadesh-207 and the kin terms are curated (Leipzig–Jakarta list for the stable class); grammar sources and cultural items keep role defaults.
 - [x] Compounds: only things are compounded; heads are CLICS neighbours (else same field), modifiers a small classifier set.
 - [x] `wasm-opt -Oz` (binaryen 117 from emsdk) saves only 0.5% gzipped on the Go bundle; not worth a dependency. The Makefile still uses it when it is on PATH.
-- [ ] Watch `npm audit`: low-severity `deepmerge` advisory via `@sveltejs/vite-plugin-svelte` (dev-only, no fix upstream yet).
+- [ ] Watch `npm audit`: low-severity `deepmerge` advisory via `@sveltejs/vite-plugin-svelte` (dev-only, no fix upstream yet; still open 2026-11-09).
 - [x] Seed sweep (`TestSeedSweep`, 16 seeds): median 5 languages (2–10), median core retention 787‰. Knobs left as they were.
 
 ## M2 · Grammar (done)
@@ -29,12 +30,12 @@ needed.
 
 ### M2 follow-ups
 
-- [ ] Some inventories show two segments with the same symbol (e.g. two "ʔ"): distinct feature bundles render alike. Make `RenderFeatures` disambiguate, or merge near-identical bundles.
-- [ ] Only 3SG cells exist for future, perfect and progressive; the parallel text uses them for every person.
-- [ ] Definiteness is not crossed with case in stored cells (the parallel text attaches a bound article outside the case form).
-- [ ] Periphrastic auxiliaries are rendered uninflected.
-- [ ] Performance: analogy and inflected cells doubled the cost of a run (0.8 → 1.6 s native on one core; 3.7–4.0 s in the browser). Ideas: cheaper productive-pattern updates, sampling cells in `MorphSim`.
-- [ ] Full syncretism (loss) is rare within 1000 years; check the 75% threshold against real attrition rates.
+- [x] Two segments with one symbol: sound changes now leave canonical bundles (`phon.Canon`), `RenderFeatures` finds exact base+diacritic spellings (tie bar for labial-velars), and `phon.Labels` marks anything left. No collisions in seeds 1–30. Rules built from segments use `phon.Spell`, so mergers no longer miss.
+- [x] Future, perfect and progressive agree with every person in the parallel text and myths (3SG agreement swapped for the person's own; still only 3SG is stored).
+- [x] Definite + oblique: rendered with the article inside the case marker (stem-DEF-CASE), from the stored definite form (not stored as cells).
+- [x] Periphrastic auxiliaries built on verbs agree with the subject; the main verb stays plain.
+- [x] Performance: single-word memo keys, remembered MayApply misses, memoised `RegularForms`, GC tuning in the worker. Default run ~1.75 s native, ~4.0 s in the browser; Empire collapse 9.6 → 5.2 s native per 1000 years (analogy now runs at realistic rates, which costs back part of the gain).
+- [x] Syncretism: loss at two thirds of cells (14% of languages lose a slot in 1000 years, was 9%). Still slower than real attrition (Latin lost most noun case in ~800 years): affix erosion is the driver, not the threshold.
 
 ## M3 · Meaning and contact (done)
 
@@ -46,12 +47,12 @@ needed.
 
 ### M3 follow-ups
 
-- [ ] Loans start only once the family splits, and families stay one language for 700+ years, so runs that split late (2 of 12 seeds) have no loans between languages. Polities, trade and prestige centres (M4) should drive borrowing more than border contact does.
-- [ ] Loans enter at borders and many never reach the language's centre, which the table shows. A standard (M4) would carry them.
-- [ ] Calques (loan translations of compounds) are not modelled.
-- [ ] Substrate phonology is a single merger; feature transfer (e.g. retroflexes) is not modelled.
-- [ ] Place names are not shown on the map itself, only for the selected hex; long compound names are common.
-- [ ] Polysemy is still high (30–80 concepts per language share a word with another). Real languages colexify perhaps 15–25% of a 300-concept list.
+- [x] Capitals borrow from foreign capitals within ten hexes or along routes (court loans). Loans between languages still need two languages: a family that splits late has none before it splits (as it should).
+- [x] A language is recorded at the capital of its largest polity (else its centre); with court loans and standards, loans at reference varieties +40% (29% → 37% of a language's loans).
+- [x] Calques: compound roots record their parts; a borrowed compound is translated part by part 35% of the time.
+- [x] Substrates can pass on a sound the family lacked (20% of packages): the nearest phoneme becomes it in one context, leaving a new contrast.
+- [x] Place names on the map (capitals and the largest communities, three hexes apart, a toggle); names of four or more syllables are worn down to three when a community takes them over.
+- [x] Polysemy measured: median 16% of concepts (9–24%) at 1000 years and no higher at 3000; `TestPolysemyInRange` keeps it there.
 
 ## M4 · Society and scenarios (done)
 
@@ -60,16 +61,17 @@ needed.
 - [x] Several language families (namespaced roots); scenario files (YAML subset, `engine/scenario`), five starters, `isogloss run --scenario`, scenario picker and sandbox events in the UI.
 - [x] Gate: `TestEmpireCollapseContinuum` (seeds 7–9: 72–100% understand the capital under the empire, 22–30% 800 years after the fall, continua of 7–10 languages).
 - [x] `make test-wasm` passes. The intermittent wasm crash was out of memory: the intern table kept every intermediate variety between clusterings (now pruned each generation; peak live heap 422 → 121 MB in Empire collapse), and long statistical tests fragment wasm memory, which never shrinks, so they are skipped under wasm (`heavy`); the golden digests still run there.
-- [ ] Scenario runs that settle the whole map at year 0 are slow: Empire collapse takes ~14 s per 1000 years in the browser (default run ~3.7 s).
-- [ ] Island hopping's founder effect is real but small (inventories 1–7 phonemes smaller after 3+ founder losses).
+- [x] Empire collapse: 5.2 s native per 1000 years (was 9.6).
+- [x] Island hopping: a crossing loses its rarest sound and half the time the next; 80% of communities with two or more founder losses still lack most of those sounds at the end. Mean inventories are not clearly smaller: mainland simplification drowns it out.
 
 ## M5 · Campaign and LLM
 
 - [x] Steering campaign: `campaign:` section in scenario files (people, income, start, goals: spoken, unity, tonal, daughters, survive); influence from population, writing and a standard; paid actions (script, standard, seafaring, route, encourage/suppress a change in your land, expand, conquer) charged when they happen and refused when unaffordable; score; Campaign tab; two campaign starters (The river people, Song of the delta).
 - [x] Storyteller in `web/`: names picked from engine-built candidates, era chronicles, myths as abstract text trees rendered by the engine; annotations keyed by (seed, job, prompt version) stored in the save.
-- [ ] The storyteller's live API calls have not been exercised end to end (no key in development); the engine side (candidates, era data, tree validation and rendering, annotations through replay) is tested.
-- [ ] Polity names from the storyteller (`namecands?kind=polity` exists; the UI names only languages).
-- [ ] Campaign balance: costs and income are first guesses; one test plays a few actions.
+- [x] Storyteller end to end in a browser against a mocked API (`npm run e2e`): names, realms, a chronicle and a myth, and the request shape. It found and fixed a bug: naming never sent a request.
+- [ ] One storyteller session with a real API key (names, a chronicle, a myth), to confirm the live API accepts the requests the mock checks.
+- [x] Polity names from the storyteller (Stories tab, Realms).
+- [x] Campaign balance: `TestCampaignBalance` plays strategies over ten seeds. Income cut ~4× (it bought everything), goals made harder (idle met 75%), steering now acts on a change's arrival too. River people: idle 50% of goals, balanced 75%; delta: tonal in 3/10 runs idle, 5/10 steered.
 
 ## Extension points (after M5)
 

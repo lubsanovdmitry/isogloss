@@ -33,6 +33,7 @@ bin/isogloss sca testdata/sca/grimm-verner/rules.isg testdata/sca/grimm-verner/w
 cd web && npm install && cd ..
 make web-dev                   # browser app with hot reload
 make web                       # production build in web/dist
+cd web && npm run e2e          # browser smoke test against web/dist (cached Playwright Chromium)
 ```
 
 ## Layout

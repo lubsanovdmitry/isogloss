@@ -12,9 +12,10 @@ Decisions made while building M0–M2 that refine or depart from the spec.
 | WASM bundle | ~1.0 MB gzipped (standard Go, `-s -w`; wasm-opt saves only 0.5%) |
 | M2: irregular paradigms emerge | `TestIrregularParadigmsEmerge`: 8 of 8 seeds have stem allomorphy in a frequent (class ≤ 2) lexeme after 1000 years, and frequent paradigms are more often irregular than rare ones |
 | M2: 1000 years in the browser | 3.7–4.0 s in headless Chromium (seed 42; the machine was loaded), under the 5 s gate; ~1.6 s native on one core |
-| M3: loan strata and doublets in the comparative table | `TestLoanStrataAndDoublets` (seeds 1–12): every run's table has substrate words; of the 8 runs that split into languages by year 800, all 8 show loans from at least three donors and 7 show a loan doublet (a root present both natively and as a loan) |
+| M3: loan strata and doublets in the comparative table | `TestLoanStrataAndDoublets` (seeds 1–12): every run's table has substrate words; of the 8 runs that split into languages by year 800, all 8 show loans from at least three donors and a loan doublet (a root present both natively and as a loan; 7 of 8 before court loans) |
 | M4: Empire collapse produces a continuum | `TestEmpireCollapseContinuum` (seeds 7–9): under the empire 72–100% of communities understand the capital's speech; 800 years after it falls in year 1000, 22–30% do, and the family forms a continuum of 7–10 languages |
 | M4: 1000 years in the browser | ~3.7 s for the default run (seed 42); scenario runs that settle the whole map at year 0 are slower (Empire collapse ~14 s per 1000 years) |
+| Follow-ups (2026-11-09): 1000 years | default run ~4.0 s in headless Chromium (machine loaded), ~1.75 s native on one core; Empire collapse 5.2 s native (was 9.6) |
 | M3: 1000 years in the browser | ~3.3 s in headless Chromium (seed 42); ~1.5 s native on one core (M2's 1.8 s on the same machine) |
 
 ## Departures from the spec
@@ -51,10 +52,11 @@ Decisions made while building M0–M2 that refine or depart from the spec.
 ## Calibration knobs (`sim.DefaultConfig`)
 
 Sound-change proposal rate 60‰ per community per generation; word-replacement
-rates by stability class (8–240 per 100k community-generations, scaled ×0.7);
+rates by stability class (8–240 per 100k community-generations, scaled ×0.45
+since the whole Swadesh list got curated stability classes, was ×0.52);
 innovations start at 0.2 adoption with a local growth rate in −0.25…0.75 and
 spread for 5–15 generations. Across 16 seeds (`TestSeedSweep`) 1000 years give
-a median of 5 languages (2–7) and median core retention of 782‰; real-world
+a median of 7 languages (1–11) and median core retention of 782‰ (2026-11-09; was 5 languages, 2–7); real-world
 retention is ~80% per millennium. M3 knobs: meaning drift 30‰, borrowing
 ×1000, inventions 40‰ per unknown item per generation, 4 substrates leaving a
 package at 100‰ of settlements, structural changes crossing language
@@ -109,7 +111,10 @@ irregular when any cell differs from what the productive pattern gives its
 base stem, which counts phonologically conditioned alternations (final
 devoicing, umlaut) as irregular, as they are until analogy removes them.
 Levelling proposals per 100 000 community-generations go from 30 (class 1)
-to 10 000 (class 5).
+to 3000 (class 5), ×√10 per class: Lieberman et al. (2007) find
+regularization ∝ frequency^-1/2. (The first table, 30…10 000, was never
+exercised: the old concept data put no tracked lexeme in the rare classes.)
+`RegularForms` is memoised on (productive patterns, stem, phonology).
 
 **Word order** has six parameters with WALS priors (`morph.SampleOrder`
 samples clause order, then each parameter given the earlier ones). Harmonic
@@ -244,8 +249,8 @@ communities at least four hexes apart become hubs linked to their two
 nearest hubs along the cheapest path: route edges double contact, and hubs
 borrow along routes (Wanderwörter). A polity with a coastal capital may take
 to the sea: its coastal communities link to land up to two sea hexes away
-and colonise islands. A group crossing the sea loses its rarest sound (a
-founder effect that does not spread).
+and colonise islands. A group crossing the sea loses its rarest sound, and half
+the time the next rarest (a founder effect that does not spread).
 
 **Writing.** A polity of six or more hexes with no writing neighbour may
 invent a script (10‰); one within ten hexes of a writing polity borrows its
@@ -292,14 +297,14 @@ whole map at year 0 cost several times a default run.
 
 **Campaign.** A scenario with a `campaign:` section makes the run a
 steering game. The player's polity is founded at `people`; influence
-accrues each generation (population / 250 + 5, +5 with writing, +5 with a
+accrues each generation (population / 1000 + 3, +5 with writing, +5 with a
 standard, scaled by `income`). Player actions are ordinary interventions
 marked `Paid`: they are charged when they take effect and refused (with a
 chronicle note) when the purse is short, so a campaign replays exactly from
 its save. Costs: script 150, standard 200, seafaring 150, route 100,
 encourage 40, suppress 60, expand 30, conquer 120. Encouraging a spreading
-change multiplies its local rate ×2.5 in the player's communities,
-suppressing ×0.15. God-mode actions (forcing sound changes, plagues) are
+change multiplies its local rate and its pull from neighbours ×4 in the
+player's communities, suppressing ×0.1. God-mode actions (forcing sound changes, plagues) are
 refused in a campaign. Goals: `spoken: N` (hexes intelligible with the
 capital), `unity` (the farthest member still understands the capital),
 `tonal` (≥ 10% of the capital's vowels carry tone), `daughters: N` (living
@@ -332,3 +337,74 @@ the models that support them. Three jobs (`web/src/lib/story.ts`):
 Outputs are annotations keyed `seed/job/prompt-version`, stored in the run
 (`Sim.Annotations`, carried by saves, excluded from the digest), so a
 replay or a reloaded save never asks again.
+
+## Follow-ups (2026-11-09)
+
+**Canonical bundles.** Sound changes could leave combinations no symbol
+shows (an unrounded but labial vowel, a vowel without tense, a voiced
+glottal stop), so two segments of an inventory rendered alike, and rules
+built from rendered segments (substrate mergers, founder losses, template
+slots) silently matched nothing, because a literal matches only its exact
+bundle. `phon.Canon` applies the table's redundancy rules after every
+feature change (bundles in the table are left alone); `RenderFeatures`
+searches the 48 nearest bases with up to three diacritics for an exact
+spelling, writes labial-velars with a tie bar (ɣ͡β), and only then
+approximates; `phon.Spell` gives rule source (IPA if it parses back exactly,
+else a full feature matrix); `phon.Labels` marks what still collides.
+
+**Timeline.** `Sim.Clone` copies what a run mutates (communities, waves,
+innovations and their curves, polities and their spellings, the campaign,
+the intern table) and shares the rest: the world, the proto-languages and
+every variety (varieties are persistent). Caches start empty. A
+snapshot pins that moment's varieties, ~10 MB in a default run and ~30 MB
+when the whole map is settled, so `Timeline` keeps at most ten and doubles
+the spacing when full. `At(t)` clones the latest snapshot ≤ t and steps on;
+it equals `Replay(Fork(t))` (tested with thinning, a fork that runs on, and
+a clone that diverges while the original must not notice). Forks keep a
+scenario's own later events (`Intervention.Scripted`; replay recognises
+them in older saves). The worker answers queries from the moment being
+looked at.
+
+**Reference varieties and court loans.** A language is recorded (word
+lists, tree, naming) at the capital of its largest standing polity, else at
+its central community, as a standard language is its capital's speech.
+Capitals borrow from foreign capitals within ten hexes or along a trade
+route (one word per generation from a more prestigious court, ×0.3 from a
+less prestigious one). Loans at the reference varieties rose 40%.
+
+**Calques and substrate sounds.** Coined compound roots record modifier and
+head; a borrower translates a foreign compound with its own words 35% of
+the time. A substrate package may (20%) turn the variety's nearest phoneme
+into a sound only the substrate had, in the first context of four that
+changes at least three words.
+
+**Rendering grammar.** Only the 3SG of future, perfect and progressive is
+stored. Other persons cut the 3SG agreement (by its tagged boundary) and
+add the person's own material from the verb's present-tense productive
+pattern. A periphrastic tense built on a verb inflects the auxiliary for
+the subject and leaves the main verb plain. A definite noun in an oblique
+case is the stored definite form plus the case's own material outside it.
+
+**Measured, not changed.** Polysemy (concepts sharing a word with another)
+is a median 16% at 1000 years and no higher at 3000: replacements remove
+it as fast as shifts create it. Syncretism counts as loss at two thirds of
+cells; 14% of languages lose a slot within 1000 years, still slower than
+real attrition, because affix erosion drives it.
+
+**Campaign balance.** `TestCampaignBalance` plays idle, steering and
+balanced strategies over ten seeds of both campaigns (writer and expander
+too with `ISOGLOSS_BALANCE=1`). Income was ~8000 per run against costs of
+30–200 and an idle player met 75% of goals; now income is ~2100, river
+people need 200 hexes and four daughter languages, the delta 180 hexes,
+and steering scales a change's arrival from neighbours as well as its
+local growth (suppressing did nothing before). Idle meets 50% of the river
+goals and the balanced player 75%; steering makes the delta tonal in 5 of
+10 runs, against 3 idle. A standard slows change at the capital, so it
+works against the tone goal.
+
+**Browser smoke test.** `npm run e2e` (after `make web`) serves `dist/`
+and drives Chromium in one Node process: place labels, looking back and
+forking, and the storyteller with the real SDK against a mocked API
+(checking model, beta header, fallbacks, effort and schema). It found that
+language naming never sent a request: the query's arguments overwrote its
+name.
