@@ -209,6 +209,11 @@ func (s *Sim) validate(iv Intervention) error {
 		if _, ok := lex.ConceptByLabel(iv.Rule); !ok || !land(iv.Hex) {
 			return errors.New("sim: invent needs a known concept and a land hex")
 		}
+	case "gram", "order", "syllables":
+		if iv.Hex >= 0 && !land(iv.Hex) {
+			return errors.New("sim: " + iv.Kind + " needs a land hex (or -1 for everywhere)")
+		}
+		return validateStructural(iv)
 	default:
 		return errors.New("sim: unknown intervention " + iv.Kind)
 	}
@@ -220,23 +225,34 @@ func (s *Sim) applyInterventions() {
 		if iv.Tick != s.Tick {
 			continue
 		}
-		if iv.Kind != "rule" {
-			s.applyEvent(iv)
-			continue
-		}
-		rule, err := tmpl.Compile(iv.Rule)
-		if err != nil {
-			continue // validated when scheduled
-		}
-		in := &history.Innovation{
-			Kind: history.Sound, Template: "user:" + rule.Name, Family: "user",
-			Src: iv.Rule, Rule: rule, Diffuse: rule.Diffuse, Stress: -1, Forced: true,
-			Rate: signedQ16(600), Life: 12,
-		}
 		origin := iv.Hex
 		if origin < 0 {
 			origin = s.homeland()
 		}
+		var in *history.Innovation
+		var text string
+		switch iv.Kind {
+		case "rule":
+			rule, err := tmpl.Compile(iv.Rule)
+			if err != nil {
+				continue // validated when scheduled
+			}
+			in = &history.Innovation{Kind: history.Sound, Template: "user:" + rule.Name, Family: "user",
+				Src: iv.Rule, Rule: rule, Diffuse: rule.Diffuse, Stress: -1}
+			text = "forced change " + rule.Name
+		case "gram", "order", "syllables":
+			var why string
+			if in, why = s.structuralInnov(iv, origin); in == nil {
+				s.log(history.Event{Kind: "intervention", Hex: iv.Hex, Text: "nothing happens: " + why})
+				continue
+			}
+			in.Template, in.Family = "user", "user"
+			text = "forced: " + in.Label()
+		default:
+			s.applyEvent(iv)
+			continue
+		}
+		in.Forced, in.Rate, in.Life = true, signedQ16(600), 12
 		in.Origin, in.Tick = origin, s.Tick
 		s.Reg.Add(in)
 		s.ap.Track(in.ID)
@@ -256,7 +272,7 @@ func (s *Sim) applyInterventions() {
 			l.wave.Level[h], l.wave.Applied[h] = fx.One, true
 			s.adopt(s.ByHex[h], in)
 		}
-		s.log(history.Event{Kind: "intervention", Hex: iv.Hex, Innov: in.ID, Text: "forced change " + rule.Name})
+		s.log(history.Event{Kind: "intervention", Hex: iv.Hex, Innov: in.ID, Text: text})
 	}
 }
 

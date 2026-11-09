@@ -1,11 +1,12 @@
 <script lang="ts">
   import type { Engine } from './engine';
+  import StructurePanel from './StructurePanel.svelte';
 
   interface Props {
-    engine: Engine; hex: number; onscheduled: (msg: string) => void;
+    engine: Engine; hex: number; tick: number; onscheduled: (msg: string) => void;
     polity?: { id: number; name: string } | null; // the selected hex's polity
   }
-  let { engine, hex, onscheduled, polity = null }: Props = $props();
+  let { engine, hex, tick, onscheduled, polity = null }: Props = $props();
   let thing = $state('wine');
   let script = $state('alphabet');
 
@@ -126,6 +127,8 @@
 C*  (C)        zero or more, optional
 stress:1  tone:rise  phon:breathy   prosody`}</pre>
 </details>
+
+<StructurePanel {engine} {hex} {tick} {onscheduled} />
 
 <h3 class="ev">Events</h3>
 <p class="hint">Change who talks to whom. Events act at the start of the next generation and go into the save, so a replay repeats them.</p>

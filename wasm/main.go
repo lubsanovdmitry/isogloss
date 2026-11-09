@@ -9,7 +9,7 @@
 //	step     {n, since}                  advance n ticks; returns snapshot
 //	snapshot {since}
 //	intervene{rule, hex}                 schedule a rule for the next tick
-//	query    {kind, ...}                 compare | corresp | intel | lang | sketch | paradigm | cell | fable | word | innov | innovs | preview | suggest | frames | concepts | labels | place
+//	query    {kind, ...}                 compare | corresp | intel | lang | sketch | paradigm | cell | fable | word | innov | innovs | preview | suggest | structure | frames | concepts | labels | place
 //	save                                 returns the save (seed, tick, interventions)
 //	load     {save}                      replay a save
 //	view     {tick}                      look at the run as it was at tick (-1: live); queries follow
@@ -299,6 +299,8 @@ func query(q js.Value, s *sim.Sim) string {
 		return string(render.InnovJSON(s, uint32(num(q, "id", 0))))
 	case "innovs":
 		return string(render.InnovListJSON(s, num(q, "min", 3)))
+	case "structure":
+		return string(render.StructureJSON(s, int32(num(q, "hex", -1))))
 	case "suggest":
 		return string(render.SuggestJSON(s, int32(num(q, "hex", -1)), num(q, "n", 8), uint64(num(q, "salt", 0))))
 	case "preview":

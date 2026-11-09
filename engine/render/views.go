@@ -606,6 +606,43 @@ func PreviewJSON(s *sim.Sim, hex int32, src string) []byte {
 	return j.Bytes()
 }
 
+// StructureJSON describes what the structural interventions can change at
+// a hex: each grammatical slot (its stage, source and the usual sources),
+// each word-order parameter (value and options) and the syllable template.
+func StructureJSON(s *sim.Sim, hex int32) []byte {
+	var j JSON
+	if hex < 0 || int(hex) >= len(s.ByHex) || s.ByHex[hex] == nil {
+		return j.Obj().KS("error", "hex is not settled").End().Bytes()
+	}
+	v := s.ByHex[hex].Variety
+	cs := lex.Concepts()
+	j.Obj().K("slots").Arr()
+	for sl := morph.Slot(0); sl < morph.NumSlots; sl++ {
+		e := v.M.Exp[sl]
+		info := sl.Info()
+		j.Obj().KS("slot", sl.String()).KS("name", info.Name).KS("pos", info.POS.String()).KS("stage", e.Stage.String())
+		if e.Source >= 0 && int(e.Source) < len(cs) && e.Stage != morph.None {
+			j.KS("source", cs[e.Source].Label)
+		}
+		j.K("sources").Arr()
+		for _, x := range info.Sources {
+			j.S(x)
+		}
+		j.EndArr().End()
+	}
+	j.EndArr().K("order").Arr()
+	for p := morph.Param(0); p < morph.NumParams; p++ {
+		j.Obj().KS("param", p.Name()).KS("value", v.M.Order.ValueName(p)).K("values").Arr()
+		for _, x := range p.Values() {
+			j.S(x)
+		}
+		j.EndArr().End()
+	}
+	t := v.Phonotax.Template
+	j.EndArr().KS("template", t.String()).KI("maxOnset", int64(t.MaxOnset)).KI("maxCoda", int64(t.MaxCoda)).End()
+	return j.Bytes()
+}
+
 // SuggestJSON lists sound changes the engine finds plausible at a hex.
 func SuggestJSON(s *sim.Sim, hex int32, n int, salt uint64) []byte {
 	var j JSON
@@ -679,7 +716,7 @@ func IntelJSON(s *sim.Sim) []byte {
 // structural reports changes that define subgroups: sound changes,
 // grammaticalization steps and word-order changes (not single words).
 func structural(in *history.Innovation) bool {
-	return in.Kind == history.Sound || in.Kind == history.Gram || in.Kind == history.Order
+	return in.Kind == history.Sound || in.Kind == history.Gram || in.Kind == history.Order || in.Kind == history.Syllable
 }
 
 // gramTook reports whether a grammaticalization step is reflected in v (its

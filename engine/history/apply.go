@@ -157,9 +157,48 @@ func (a *Applier) Apply(v *lex.Variety, e lex.Entry) *lex.Variety {
 		}
 	case Order:
 		nv.M.Order[in.Order.Param] = in.Order.Value
+	case Syllable:
+		applySyll(nv, *in.Syll)
 	}
 	nv.Invalidate()
 	return nv
+}
+
+// applySyll changes the syllable template and repairs every word and
+// paradigm cell that no longer fits it.
+func applySyll(nv *lex.Variety, sc SyllChange) {
+	nv.Phonotax.Template = sc.Apply(nv.Phonotax.Template)
+	if nv.Phonotax.Template.MaxOnset < 2 {
+		nv.Phonotax.SClusters = false
+	}
+	if sc.Onset >= 0 && sc.Coda >= 0 {
+		return // a looser template leaves every word legal
+	}
+	for i := 0; i < nv.Lex.Len(); i++ {
+		c := lex.ConceptID(i)
+		l := nv.Lex.At(c)
+		if l.Absent() {
+			continue
+		}
+		if f := nv.Finish(l.Form); !f.Equal(l.Form) {
+			nv.SetForm(c, f)
+		}
+	}
+	for pi, p := range nv.M.Para {
+		if p == nil {
+			continue
+		}
+		forms := slices.Clone(p.Forms)
+		changed := false
+		for k, f := range forms {
+			if g := nv.Finish(f); !g.Equal(f) {
+				forms[k], changed = g, true
+			}
+		}
+		if changed {
+			nv.SetPara(pi, lex.NewParadigm(forms))
+		}
+	}
 }
 
 // NewForm is the form a lexical change or loan gives its concept in a
@@ -222,7 +261,7 @@ func applyGram(nv *lex.Variety, g *GramChange, tick int32) {
 	e := &nv.M.Exp[g.Slot]
 	switch g.To {
 	case morph.Periphrasis:
-		if e.Stage != morph.None && e.Stage != morph.Lost {
+		if e.Stage != morph.None && e.Stage != morph.Lost && !(g.Renew && e.Stage.Free()) {
 			return
 		}
 		*e = morph.Exponent{Stage: morph.Periphrasis, Source: g.Source, Prefix: g.Prefix, Since: tick}

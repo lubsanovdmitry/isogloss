@@ -82,7 +82,7 @@ func deleteSeg(w *Word, at int) {
 // It reports whether w changed. Syllables are current afterwards.
 func Repair(w *Word, p *Phonotactics, mode RepairMode, ep Segment) bool {
 	changed := false
-	for iter := 0; iter < 8; iter++ {
+	for iter := 0; iter < max(8, len(w.Segs)); iter++ {
 		kind, k := violation(w, p)
 		if kind == 0 {
 			break
@@ -98,6 +98,8 @@ func Repair(w *Word, p *Phonotactics, mode RepairMode, ep Segment) bool {
 			insertSeg(w, s.Start+1, ep)
 		case kind == 'o':
 			deleteSeg(w, s.Start)
+		case mode == RepairEpenthesis && p.Template.MaxCoda == 0:
+			insertSeg(w, s.End, ep) // no codas at all: the vowel follows (kat → kati)
 		case mode == RepairEpenthesis:
 			insertSeg(w, s.End-1, ep)
 		default:

@@ -120,6 +120,22 @@ if (cap) {
   await page.waitForSelector('ul.pv li', { timeout: 30000 });
   const src = await page.locator('textarea').inputValue();
   check(src.startsWith('rule ') && (await page.locator('ul.pv li').count()) > 0, `a suggestion loads and previews: ${src.split('\n')[0]}`);
+  // Structural interventions: set the word order, shorten codas.
+  await page.locator('select[aria-label="Word-order parameter"]').selectOption('clause order');
+  const now = (await page.locator('.row .now').nth(1).textContent()) ?? '';
+  await page.getByRole('button', { name: 'Set', exact: true }).click();
+  await page.waitForFunction(() => /clause order becomes/.test(document.querySelector('.status')?.textContent ?? ''), null, { timeout: 30000 });
+  check(true, `word order scheduled (${now.trim()}): ${(await page.locator('.status').textContent())?.trim()}`);
+  const shorter = page.getByRole('button', { name: 'Shorter codas' });
+  if (await shorter.isEnabled()) {
+    await shorter.click();
+    await page.waitForFunction(() => /Codas shrink/.test(document.querySelector('.status')?.textContent ?? ''), null, { timeout: 30000 });
+    check(true, 'shorter codas scheduled');
+  }
+  await page.getByRole('button', { name: 'Next generation' }).click();
+  await page.getByRole('tab', { name: 'Chronicle' }).click();
+  await page.waitForFunction(() => /forced: clause order becomes/.test(document.body.textContent ?? ''), null, { timeout: 60000 });
+  check(true, 'the forced word order is in the chronicle');
 } else {
   console.log('skip no capital yet');
 }

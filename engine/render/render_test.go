@@ -43,6 +43,7 @@ func TestViews(t *testing.T) {
 	valid(t, "innov", InnovJSON(s, 1))
 	valid(t, "intel", IntelJSON(s))
 	valid(t, "labels", LabelsJSON(s, 14))
+	valid(t, "structure", StructureJSON(s, s.Communities()[0].Hex))
 	valid(t, "place", PlaceJSON(s, s.Communities()[0].Hex))
 	valid(t, "place-sea", PlaceJSON(s, 0))
 	valid(t, "compare-all", Compare(s, false).JSON(s))

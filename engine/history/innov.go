@@ -22,9 +22,10 @@ const (
 	Order    // M2
 	Loan     // M3
 	Spelling // M4
+	Syllable // the syllable template loosens or tightens
 )
 
-var kindNames = [...]string{"sound", "lexical", "semantic", "morph", "gram", "order", "loan", "spelling"}
+var kindNames = [...]string{"sound", "lexical", "semantic", "morph", "gram", "order", "loan", "spelling", "syllable"}
 
 func (k Kind) String() string { return kindNames[k] }
 
@@ -65,6 +66,7 @@ type GramChange struct {
 	To     morph.Stage // Periphrasis (a source is recruited), Fixed, Clitic or Affix
 	Source int32       // concept ID, or -1 for an inherited exponent
 	Prefix bool        // Periphrasis: the construction precedes its host
+	Renew  bool        // Periphrasis: replaces a free construction already in use
 }
 
 // OrderChange sets a word-order parameter.
@@ -91,12 +93,43 @@ type Innovation struct {
 	Gram     *GramChange
 	Target   lex.ConceptID // Morph: the lexeme analogy regularizes
 	Order    *OrderChange
+	Syll     *SyllChange
 	Rate     int32 // local logistic growth rate, signed Q16
 	Life     int32 // ticks during which the innovation actively spreads
 	Forced   bool
 	// Curve records adoption at the end of each tick while the innovation
 	// is live; Curve[0] is tick Tick (the tick it was proposed).
 	Curve []Adoption
+}
+
+// SyllChange widens or narrows the syllable template: how many consonants
+// may begin (Onset) or end (Coda) a syllable, by ±1. Narrowing repairs
+// the words that no longer fit (epenthesis or deletion, by the variety's
+// repair strategy), as when a language comes to allow only open syllables.
+type SyllChange struct {
+	Onset, Coda int8
+}
+
+// Apply returns template t changed by sc (onsets 1..3, as every language
+// allows CV; codas 0..3; a minimum never exceeds its maximum).
+func (sc SyllChange) Apply(t phon.Template) phon.Template {
+	t.MaxOnset = max(1, min(3, t.MaxOnset+int(sc.Onset)))
+	t.MaxCoda = max(0, min(3, t.MaxCoda+int(sc.Coda)))
+	t.MinOnset = min(t.MinOnset, t.MaxOnset)
+	t.MinCoda = min(t.MinCoda, t.MaxCoda)
+	return t
+}
+
+// Label describes the change.
+func (sc SyllChange) Label() string {
+	part, d := "onsets", sc.Onset
+	if sc.Coda != 0 {
+		part, d = "codas", sc.Coda
+	}
+	if d > 0 {
+		return "syllables allow longer " + part
+	}
+	return "syllables allow shorter " + part + " only"
 }
 
 // Adoption is how far an innovation has got at one tick: communities that
@@ -123,6 +156,8 @@ func (in *Innovation) Label() string {
 		return "analogy regularizes '" + lex.Concepts()[in.Target].Label + "'"
 	case Order:
 		return in.Order.Param.Name() + " becomes " + in.Order.Param.Values()[in.Order.Value]
+	case Syllable:
+		return in.Syll.Label()
 	}
 	return in.Kind.String()
 }

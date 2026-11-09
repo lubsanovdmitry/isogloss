@@ -352,7 +352,7 @@
         {:else if tab === 'fable'}
           <FablePanel {engine} tick={shown.tick} onlang={(id) => { focusLang = id; tab = 'lang'; }} />
         {:else if tab === 'rules'}
-          <RulePanel {engine} hex={selected} polity={selPolity} onscheduled={(m) => (status = m)} />
+          <RulePanel {engine} hex={selected} tick={shown.tick} polity={selPolity} onscheduled={(m) => (status = m)} />
         {:else}
           <Chronicle events={past ? events.filter((e) => e.tick <= past!.tick) : events} oninnov={showInnov} onhex={select} />
         {/if}

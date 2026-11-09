@@ -63,6 +63,21 @@ func trace(reg *Registry, proto, v *lex.Variety, adopted []lex.Entry, from, n in
 				next.SClusters = true
 			}
 		}
+		if in.Kind == Syllable {
+			// Mirrors applySyll: the template changes; a narrower one
+			// repairs the word.
+			ph.Template = in.Syll.Apply(ph.Template)
+			if ph.Template.MaxOnset < 2 {
+				ph.SClusters = false
+			}
+			if i >= from && (in.Syll.Onset < 0 || in.Syll.Coda < 0) && !cur.Absent() {
+				if f := finish(cur.Form, &ph, stress, v.Repair, v.Epenth); !f.Equal(cur.Form) {
+					steps = append(steps, TraceStep{e.Tick, in.ID, in.Syll.Label() + ": repair (" + v.Repair.String() + ")", cur.Form, f})
+					cur.Form = f
+				}
+			}
+			continue
+		}
 		if i < from {
 			if in.Kind == Sound && in.Stress >= 0 {
 				stress = phon.StressRule(in.Stress)

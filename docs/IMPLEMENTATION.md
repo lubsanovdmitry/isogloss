@@ -408,3 +408,18 @@ forking, and the storyteller with the real SDK against a mocked API
 (checking model, beta header, fallbacks, effort and schema). It found that
 language naming never sent a request: the query's arguments overwrote its
 name.
+
+**Structural interventions.** Besides forced sound changes, the sandbox
+can force a grammatical construction (recruit a word for a slot, which
+may replace a free construction but not a clitic or affix), push one a
+stage along the cycle, set a word-order value, or loosen or tighten the
+syllable template by one consonant at the onset or coda (onsets 1–3, as
+every language allows CV; codas 0–3). Each is an ordinary innovation
+(`Intervention` kinds `gram`, `order`, `syllables`; new kind
+`history.Syllable`) that starts at a hex or everywhere and spreads; a
+tighter template repairs the lexicon and paradigm cells, and traces show
+the repair step. Repair with no codas allowed now puts the epenthetic
+vowel after the consonant (it used to loop, as nothing had tightened a
+template before). The Change rules tab also offers sound changes: every
+template filled from the community's sounds, scored as the simulation
+scores its own proposals.
