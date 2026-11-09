@@ -180,7 +180,7 @@ func segAlternatives(alt string, inv []phon.FeatureSet) ([]string, []phon.Featur
 	var feats []phon.FeatureSet
 	for _, s := range inv {
 		if pat.MatchFeatures(s) {
-			out = append(out, phon.RenderFeatures(s))
+			out = append(out, phon.Spell(s))
 			feats = append(feats, s)
 		}
 	}

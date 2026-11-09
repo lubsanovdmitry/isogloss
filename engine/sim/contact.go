@@ -394,7 +394,7 @@ func substrateMerger(r *rng.Stream, v *lex.Variety, sb *contact.Substrate) *hist
 		if y == x || y.Has(phon.Syllabic) != x.Has(phon.Syllabic) {
 			continue
 		}
-		src := "rule substrate-merger:\n    " + phon.RenderFeatures(x) + " => " + phon.RenderFeatures(y) + "\n"
+		src := "rule substrate-merger:\n    " + phon.Spell(x) + " => " + phon.Spell(y) + "\n"
 		rule, err := tmpl.Compile(src)
 		if err != nil {
 			continue
@@ -452,7 +452,7 @@ func (s *Sim) founderEffect(c *pop.Community) {
 		return
 	}
 	y := contact.Nearest(rarest, others)
-	src := "rule founder-loss:\n    " + phon.RenderFeatures(rarest) + " => " + phon.RenderFeatures(y) + "\n"
+	src := "rule founder-loss:\n    " + phon.Spell(rarest) + " => " + phon.Spell(y) + "\n"
 	rule, err := tmpl.Compile(src)
 	if err != nil {
 		return

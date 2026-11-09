@@ -285,6 +285,7 @@ func (c *Clause) replace(w *phon.Word, s site) []phon.Segment {
 			if o.Phon >= 0 {
 				seg = seg.WithPhon(phon.Phonation(o.Phon))
 			}
+			seg.F = phon.Canon(seg.F)
 			out = append(out, seg)
 		case OList:
 			idx := c.Target[k].Seg.corrIndex(seg.F)

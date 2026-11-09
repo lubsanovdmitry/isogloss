@@ -2,6 +2,7 @@ package phon
 
 import (
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -181,6 +182,10 @@ func RenderFeatures(f FeatureSet) string {
 	if s, ok := t.cache.Load(f); ok {
 		return s.(string)
 	}
+	if out, ok := t.exact(f); ok {
+		t.cache.Store(f, out)
+		return out
+	}
 	best, bestD := 0, 1<<30
 	for i, s := range t.symbols {
 		d := Distance(s.F, f)
@@ -206,6 +211,47 @@ func RenderFeatures(f FeatureSet) string {
 	}
 	t.cache.Store(f, out)
 	return out
+}
+
+// exact looks for a base symbol plus up to three diacritics that denote
+// exactly f, among the 48 bases nearest to it, taking diacritics only while
+// each brings the bundle closer. The shortest spelling wins (then the base
+// nearer f, then the earlier base and diacritics).
+func (t *ipaTable) exact(f FeatureSet) (string, bool) {
+	type cand struct{ i, d int }
+	var cs []cand
+	for i, s := range t.symbols {
+		cs = append(cs, cand{i, Distance(s.F, f)})
+	}
+	slices.SortStableFunc(cs, func(a, b cand) int { return a.d - b.d })
+	if len(cs) > 48 {
+		cs = cs[:48]
+	}
+	best, bestN := "", 1<<30
+	var dfs func(cur FeatureSet, out string, n, from, depth int)
+	dfs = func(cur FeatureSet, out string, n, from, depth int) {
+		if cur == f {
+			if n < bestN {
+				best, bestN = out, n
+			}
+			return
+		}
+		if depth == 3 || n+1 >= bestN {
+			return
+		}
+		d0 := Distance(cur, f)
+		for j := from; j < len(t.diac); j++ {
+			nf := t.diac[j].apply(cur)
+			if Distance(nf, f) < d0 {
+				dfs(nf, out+t.diac[j].mark, n+1, j+1, depth+1)
+			}
+		}
+	}
+	for _, c := range cs {
+		s := t.symbols[c.i]
+		dfs(s.F, s.IPA, utf8.RuneCountInString(s.IPA), 0, 0)
+	}
+	return best, bestN < 1<<30
 }
 
 // Render renders one segment, with its tone mark.
@@ -380,4 +426,47 @@ func MustParseWord(s string) Word {
 		panic(err)
 	}
 	return w
+}
+
+// Spell writes a bundle for rule source: its IPA when that parses back to
+// exactly this bundle, otherwise a full feature matrix, so a rule built
+// from an inventory segment matches that segment and nothing else.
+func Spell(f FeatureSet) string {
+	s := RenderFeatures(f)
+	if seg, err := ParseSegments(s); err == nil && len(seg) == 1 && seg[0].F == f {
+		return s
+	}
+	return f.String()
+}
+
+// Labels renders an inventory so that distinct bundles get distinct
+// labels: a bundle whose IPA collides with another's and does not denote it
+// exactly gets the features its IPA misstates, as in ɣʷ[-round].
+func Labels(fs []FeatureSet) []string {
+	out := make([]string, len(fs))
+	n := map[string]int{}
+	for i, f := range fs {
+		out[i] = RenderFeatures(f)
+		n[out[i]]++
+	}
+	for i, f := range fs {
+		if n[out[i]] < 2 {
+			continue
+		}
+		seg, err := ParseSegments(out[i])
+		if err != nil || len(seg) != 1 || seg[0].F == f {
+			continue
+		}
+		g := seg[0].F
+		var diff FeatureSet
+		for k := Feature(0); k < NumFeatures; k++ {
+			v, ok := f.Get(k)
+			w, wok := g.Get(k)
+			if ok && (!wok || v != w) {
+				diff = diff.Set(k, v)
+			}
+		}
+		out[i] += diff.String()
+	}
+	return out
 }

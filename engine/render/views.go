@@ -413,11 +413,12 @@ func LangJSON(s *sim.Sim, id int32) []byte {
 	j.K("lang")
 	langJSON(&j, l)
 	var vs, cs []string
-	for _, f := range v.Inventory() {
-		if f.Has(phon.Syllabic) {
-			vs = append(vs, phon.RenderFeatures(f))
+	inv := v.Inventory()
+	for i, lab := range phon.Labels(inv) {
+		if inv[i].Has(phon.Syllabic) {
+			vs = append(vs, lab)
 		} else {
-			cs = append(cs, phon.RenderFeatures(f))
+			cs = append(cs, lab)
 		}
 	}
 	j.K("vowels").Arr()

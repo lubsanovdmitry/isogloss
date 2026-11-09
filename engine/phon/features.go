@@ -184,3 +184,63 @@ func (s FeatureSet) String() string {
 	b.WriteByte(']')
 	return b.String()
 }
+
+// Canon applies the redundancy rules of the segment table (PHOIBLE's
+// conventions) to a bundle a sound change produced, so that a change never
+// leaves a combination no symbol can show: an unrounded vowel is not
+// labial, a labial vowel is rounded, non-low vowels are tense except the
+// mid central one, a vowel is not both front and back (fronting wins),
+// ejectives are voiceless, implosives are voiced stops, and a placeless
+// fricative (h, ɦ) is a non-consonantal glide with spread glottis, and a
+// glottal stop is voiceless. Bundles in the table are returned
+// unchanged.
+func Canon(f FeatureSet) FeatureSet {
+	if _, ok := tbl().byFeat[f]; ok {
+		return f
+	}
+	if f.Has(Syllabic) && !f.Has(Consonantal) {
+		if lab, ok := f.Get(Labial); ok {
+			if r, rok := f.Get(Round); lab && rok && !r {
+				f = f.Set(Labial, false)
+				lab = false
+			}
+			if lab {
+				f = f.Set(Round, true).Set(Labiodental, false)
+			} else {
+				f = f.Unset(Round).Unset(Labiodental)
+			}
+		}
+		if f.Has(Front) && f.Has(Back) && !f.Has(High) {
+			f = f.Set(Back, false)
+		}
+		if f.Has(Low) {
+			f = f.Unset(Tense)
+		} else if _, ok := f.Get(Tense); !ok {
+			_, fok := f.Get(Front)
+			central := fok && !f.Has(Front) && !f.Has(Back) && !f.Has(High)
+			f = f.Set(Tense, !central)
+		}
+		return f
+	}
+	if f.Has(Ejective) {
+		f = f.Set(Voice, false)
+	}
+	if f.Has(Implosive) {
+		if f.Has(Continuant) {
+			f = f.Set(Implosive, false)
+		} else {
+			f = f.Set(Voice, true)
+		}
+	}
+	if placeless := !f.Has(Labial) && !f.Has(Coronal) && !f.Has(Dorsal) && !f.Has(Sonorant); placeless {
+		if f.Has(Continuant) {
+			f = f.Set(Consonantal, false)
+			if !f.Has(ConstrictedGlottis) {
+				f = f.Set(SpreadGlottis, true)
+			}
+		} else if f.Has(ConstrictedGlottis) {
+			f = f.Set(Voice, false)
+		}
+	}
+	return f
+}

@@ -88,6 +88,32 @@ func TestInventoryInvariant(t *testing.T) {
 	}
 }
 
+// TestInventoriesRenderDistinctly: sound changes leave bundles the IPA can
+// show (phon.Canon), so no two segments of an inventory look alike, and
+// rules built from rendered segments (mergers, founder losses) match them.
+func TestInventoriesRenderDistinctly(t *testing.T) {
+	heavy(t)
+	for seed := uint64(1); seed <= 4; seed++ {
+		s := New(seed, DefaultConfig())
+		s.Run(40)
+		for _, c := range s.Communities() {
+			seen := map[string]bool{}
+			for _, f := range c.Variety.Inventory() {
+				r := phon.RenderFeatures(f)
+				if seen[r] {
+					t.Fatalf("seed %d hex %d: two segments render as %q", seed, c.Hex, r)
+				}
+				seen[r] = true
+				if sp := phon.Spell(f); sp[0] != '[' {
+					if seg, err := phon.ParseSegments(sp); err != nil || seg[0].F != f {
+						t.Fatalf("seed %d: %q does not spell %v", seed, sp, f)
+					}
+				}
+			}
+		}
+	}
+}
+
 func BenchmarkRun40(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		s := New(42, DefaultConfig())
