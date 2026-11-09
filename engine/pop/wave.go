@@ -23,12 +23,14 @@ var floor = fx.One / 200 // levels below this die out
 //
 //	a_i ← a_i + r_i a_i (1 − a_i) + Σ_j c_ij π_j (a_j − a_i)⁺
 //
-// rate(i) gives r_i as signed Q16; spreading=false turns off neighbour
+// rate(i) gives r_i as signed Q16; recv(i), if not nil, scales the
+// neighbour term per mille (how receptive hex i is to the change arriving
+// from outside); spreading=false turns off neighbour
 // influence (the innovation has stopped travelling). Influence between
 // communities of different languages (lang) is scaled by cross; with cross
 // 0 the innovation stays inside the languages it reaches. It returns the
 // hexes that crossed one half this tick, ascending.
-func (w *Wave) Step(present []bool, contacts [][]Contact, prestige []fx.Q16, lang []int32, cross fx.Q16, rate func(int) int32, spreading bool) []int32 {
+func (w *Wave) Step(present []bool, contacts [][]Contact, prestige []fx.Q16, lang []int32, cross fx.Q16, rate func(int) int32, recv func(int) int64, spreading bool) []int32 {
 	var crossed []int32
 	for i := range w.Level {
 		if !present[i] {
@@ -42,6 +44,7 @@ func (w *Wave) Step(present []bool, contacts [][]Contact, prestige []fx.Q16, lan
 			v += r * a >> 16 * (int64(fx.One) - a) >> 16
 		}
 		if spreading {
+			in := int64(0)
 			for _, c := range contacts[i] {
 				aj := int64(w.Level[c.To])
 				if aj > a {
@@ -49,9 +52,15 @@ func (w *Wave) Step(present []bool, contacts [][]Contact, prestige []fx.Q16, lan
 					if lang[i] != lang[c.To] {
 						inf = inf * int64(cross) >> 16
 					}
-					v += inf * (aj - a) >> 16
+					in += inf * (aj - a) >> 16
 				}
 			}
+			if recv != nil {
+				if m := recv(i); m != 1000 {
+					in = in * m / 1000
+				}
+			}
+			v += in
 		}
 		if v < int64(floor) && !w.Applied[i] {
 			v = 0

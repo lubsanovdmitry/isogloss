@@ -64,7 +64,7 @@ func (s *Sim) income() {
 	for _, c := range s.members(p) {
 		people += int64(c.Pop)
 	}
-	gain := people/250 + 5
+	gain := people/1000 + 3
 	if p.Script != nil {
 		gain += 5
 	}
@@ -105,9 +105,9 @@ func (s *Sim) steering(id uint32, h int) int64 {
 		return 1000
 	}
 	if d > 0 {
-		return 2500
+		return 4000
 	}
-	return 150
+	return 100
 }
 
 // expand: the player's polity takes a neighbouring hex.

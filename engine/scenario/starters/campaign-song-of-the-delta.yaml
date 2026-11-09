@@ -21,4 +21,4 @@ campaign:
   start: 150
   goals:
     - tonal: true
-    - spoken: 25
+    - spoken: 180

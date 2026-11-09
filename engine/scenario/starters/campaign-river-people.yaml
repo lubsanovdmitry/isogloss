@@ -15,7 +15,7 @@ campaign:
   people: fertile
   start: 100
   goals:
-    - spoken: 40
+    - spoken: 200
     - unity: true
     - survive: true
-    - daughters: 3
+    - daughters: 4

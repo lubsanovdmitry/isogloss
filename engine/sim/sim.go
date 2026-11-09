@@ -402,7 +402,11 @@ func (s *Sim) spread() {
 			return int32(int64(l.in.Rate) * f / 1000)
 		}
 		s.broadcast(l)
-		for _, h := range l.wave.Step(s.present, s.contacts, s.prestige, s.lang, barrier, rate, spreading) {
+		var recv func(int) int64
+		if s.Camp != nil && s.Camp.steer[id] != 0 {
+			recv = func(h int) int64 { return s.steering(id, h) }
+		}
+		for _, h := range l.wave.Step(s.present, s.contacts, s.prestige, s.lang, barrier, rate, recv, spreading) {
 			crossings = append(crossings, cross{l, h})
 		}
 		l.in.Curve = append(l.in.Curve, history.Adoption{Applied: uint16(l.wave.Count()), Reached: uint16(l.wave.Reach())})
