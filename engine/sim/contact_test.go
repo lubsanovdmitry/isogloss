@@ -2,10 +2,12 @@ package sim
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"isogloss/engine/history"
 	"isogloss/engine/lex"
+	"isogloss/engine/phon"
 )
 
 // TestLoanStrataAndDoublets is the M3 gate: the comparative table shows
@@ -118,5 +120,71 @@ func TestPolysemyInRange(t *testing.T) {
 	slices.Sort(shares)
 	if m := shares[len(shares)/2]; m < 80 || m > 250 {
 		t.Errorf("median polysemy %d‰ (all: %v)", m, shares)
+	}
+}
+
+// TestCalques: compounds borrowed between languages are sometimes
+// translated part by part, and the calque is built from the borrower's own
+// words for the parts.
+func TestCalques(t *testing.T) {
+	heavy(t)
+	n := 0
+	for seed := uint64(1); seed <= 8 && n == 0; seed++ {
+		s := New(seed, DefaultConfig())
+		s.Run(40)
+		for _, in := range s.Reg.All {
+			if in.Lex == nil || !strings.HasPrefix(strings.TrimPrefix(in.Lex.How, "a new thing, "), "calque on ") {
+				continue
+			}
+			n++
+			rt, ok := s.root(in.Lex.Etym)
+			if !ok || !rt.Compound {
+				t.Fatalf("calque %q has no compound root", in.Lex.How)
+			}
+			c := s.ByHex[in.Origin]
+			if c == nil {
+				continue
+			}
+			if b := in.Lex.Form.Bounds; len(b) != 1 || b[0].At == 0 {
+				t.Errorf("calque %q is not a two-part compound: %v", in.Lex.How, in.Lex.Form)
+			}
+		}
+		t.Logf("seed %d: %d calques so far", seed, n)
+	}
+	if n == 0 {
+		t.Error("no calques in 8 runs")
+	}
+}
+
+// TestSubstrateFeatures: a substrate can pass on a sound the family lacked,
+// which then stands in the inventory beside the sound it came from.
+func TestSubstrateFeatures(t *testing.T) {
+	heavy(t)
+	n, kept := 0, 0
+	for seed := uint64(1); seed <= 6; seed++ {
+		s := New(seed, DefaultConfig())
+		s.Run(40)
+		for _, in := range s.Reg.All {
+			if in.Family != "substrate" || !strings.HasPrefix(in.Template, "substrate ") || strings.HasPrefix(in.Template, "substrate merger") {
+				continue
+			}
+			n++
+			c := s.ByHex[in.Origin]
+			if c == nil {
+				continue
+			}
+			name := strings.TrimPrefix(in.Template, "substrate ")
+			name = name[:strings.Index(name, " (")]
+			for _, f := range c.Variety.Inventory() {
+				if phon.RenderFeatures(f) == name {
+					kept++
+					break
+				}
+			}
+		}
+	}
+	t.Logf("%d substrate sounds introduced, %d still in their origin's inventory", n, kept)
+	if n == 0 || kept == 0 {
+		t.Error("no substrate sound took hold")
 	}
 }

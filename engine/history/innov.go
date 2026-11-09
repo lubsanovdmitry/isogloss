@@ -148,6 +148,10 @@ type Root struct {
 	Tick   int32
 	Origin int32
 	How    string
+	// Compound roots record their parts (modifier, head), so another
+	// language can translate them part by part (a calque).
+	Compound  bool
+	Mod, Head lex.ConceptID
 }
 
 // Label describes a grammaticalization step.

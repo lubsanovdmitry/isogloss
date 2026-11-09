@@ -348,16 +348,11 @@ func (s *Sim) coin(r *rng.Stream, c *pop.Community, con lex.ConceptID, allowLoan
 		if v.Lex.At(h).Absent() || v.Lex.At(m).Absent() || len(hw.Segs)+len(mw.Segs) > 10 {
 			return nil, 0
 		}
-		w := phon.Word{Segs: append(append([]phon.Segment(nil), mw.Segs...), hw.Segs...)}
-		for i := range w.Segs {
-			w.Segs[i].Stress = 0
-		}
-		w.Bounds = []phon.Boundary{{At: len(mw.Segs), Kind: phon.BMorpheme}}
 		how := "compound '" + cs[m].Label + "'+'" + cs[h].Label + "'"
 		if cs[con].Taboo {
 			how = "euphemism " + how
 		}
-		return &history.LexChange{Concept: con, Form: w, Freq: cur.Freq, Etym: s.newRoot(c.Hex, how), From: -1, How: how + why}, history.Lexical
+		return &history.LexChange{Concept: con, Form: compound(mw, hw), Freq: cur.Freq, Etym: s.newCompoundRoot(c.Hex, how, m, h), From: -1, How: how + why}, history.Lexical
 	case 2:
 		w := lex.NewRoot(r, v, cur.Freq)
 		return &history.LexChange{Concept: con, Form: w, Freq: cur.Freq, Etym: s.newRoot(c.Hex, "new root"), From: -1, How: "new root" + why}, history.Lexical
@@ -373,6 +368,34 @@ func (s *Sim) coin(r *rng.Stream, c *pop.Community, con lex.ConceptID, allowLoan
 		}
 		return lc, kind
 	}
+}
+
+// compound joins a modifier and a head into one unstressed word with a
+// morpheme boundary between them (stress is assigned when it is finished).
+func compound(mod, head phon.Word) phon.Word {
+	w := phon.Word{Segs: append(append([]phon.Segment(nil), mod.Segs...), head.Segs...)}
+	for i := range w.Segs {
+		w.Segs[i].Stress = 0
+	}
+	w.Bounds = []phon.Boundary{{At: len(mod.Segs), Kind: phon.BMorpheme}}
+	return w
+}
+
+// newCompoundRoot coins a root for a compound of mod and head.
+func (s *Sim) newCompoundRoot(origin int32, how string, mod, head lex.ConceptID) lex.EtymID {
+	id := s.newRoot(origin, how)
+	rt := &s.Roots[len(s.Roots)-1]
+	rt.Compound, rt.Mod, rt.Head = true, mod, head
+	return id
+}
+
+// root returns the record of a coined root.
+func (s *Sim) root(id lex.EtymID) (*history.Root, bool) {
+	i := int(id) - int(lex.FirstCoinedRoot)
+	if i < 0 || i >= len(s.Roots) || s.Roots[i].ID != id {
+		return nil, false
+	}
+	return &s.Roots[i], true
 }
 
 func (s *Sim) newRoot(origin int32, how string) lex.EtymID {

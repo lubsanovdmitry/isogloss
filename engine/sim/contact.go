@@ -341,6 +341,9 @@ func (s *Sim) takeWord(r *rng.Stream, c, d *pop.Community, con lex.ConceptID, ga
 			Stratum: src.Stratum, How: "taken over from a neighbouring dialect"}
 		return lc, history.Lexical
 	}
+	if lc := s.calque(r, c, d, con, gap); lc != nil {
+		return lc, history.Lexical
+	}
 	keep := false
 	for _, k := range s.contacts[c.Hex] {
 		if k.To == d.Hex && k.W >= fx.FromPermille(350) {
@@ -359,6 +362,33 @@ func (s *Sim) takeWord(r *rng.Stream, c, d *pop.Community, con lex.ConceptID, ga
 	lc := &history.LexChange{Concept: con, Form: f, Freq: cur.Freq, Etym: src.Etym, From: -1, Gap: gap,
 		Stratum: lex.Stratum{Kind: lex.Borrowed, Donor: d.Lang, Tick: s.Tick}, Source: src.Form, Keep: keep, How: how}
 	return lc, history.Loan
+}
+
+// calquePermille: chance that a compound is translated part by part
+// rather than borrowed whole.
+const calquePermille = 350
+
+// calque: when the donor's word is a compound whose parts the borrower has
+// words for, the borrower may build the same compound from its own words
+// (German Wolkenkratzer after skyscraper) instead of taking the word.
+func (s *Sim) calque(r *rng.Stream, c, d *pop.Community, con lex.ConceptID, gap bool) *history.LexChange {
+	src := d.Variety.Lex.At(con)
+	rt, ok := s.root(src.Etym)
+	if !ok || !rt.Compound {
+		return nil
+	}
+	v := c.Variety
+	mw, hw := v.Lex.At(rt.Mod), v.Lex.At(rt.Head)
+	if mw.Absent() || hw.Absent() || len(mw.Form.Segs)+len(hw.Form.Segs) > 10 || !r.Permille(calquePermille) {
+		return nil
+	}
+	cs := lex.Concepts()
+	how := "calque on " + s.Langs[d.Lang].Name + " " + phon.RenderWord(src.Form) + " ('" + cs[rt.Mod].Label + "'+'" + cs[rt.Head].Label + "')"
+	if gap {
+		how = "a new thing, " + how
+	}
+	return &history.LexChange{Concept: con, Form: compound(mw.Form, hw.Form), Freq: v.Lex.At(con).Freq,
+		Etym: s.newCompoundRoot(c.Hex, how, rt.Mod, rt.Head), From: -1, Gap: gap, How: how}
 }
 
 // substratePackage: when the family settles land a substrate language is
@@ -408,6 +438,11 @@ func (s *Sim) leaveSubstrate(c *pop.Community, k int32, pm uint32) {
 	}
 	if r.Permille(250) {
 		if in := substrateMerger(r, v, sb); in != nil {
+			s.newInnov(r, in, c.Hex)
+		}
+	}
+	if r.Permille(200) {
+		if in := substrateFeature(r, v, sb); in != nil {
 			s.newInnov(r, in, c.Hex)
 		}
 	}
@@ -465,6 +500,45 @@ func substrateMerger(r *rng.Stream, v *lex.Variety, sb *contact.Substrate) *hist
 		}
 		return &history.Innovation{Kind: history.Sound, Template: "substrate merger (" + sb.Name + ")", Family: "substrate",
 			Src: src, Rule: rule, Stress: -1}
+	}
+	return nil
+}
+
+// substrateFeature carries a sound of the substrate that the variety
+// lacks into it (as Dravidian retroflexes entered Indo-Aryan): the
+// variety's nearest phoneme, one or two features away, becomes the
+// substrate's sound in one context, which leaves a new contrast. The first
+// context that changes at least three words is used.
+func substrateFeature(r *rng.Stream, v *lex.Variety, sb *contact.Substrate) *history.Innovation {
+	inv, sinv := v.Inventory(), sb.V.Inventory()
+	off := r.IntN(len(sinv))
+	for j := range sinv {
+		sf := sinv[(j+off)%len(sinv)]
+		if sf.Has(phon.Syllabic) || slices.Contains(inv, sf) {
+			continue
+		}
+		x := contact.Nearest(sf, inv)
+		if x.Has(phon.Syllabic) || phon.Distance(x, sf) > 4 {
+			continue
+		}
+		for _, env := range []string{"_ [+syl +back]", "# _", "V _ V", "_ #"} {
+			src := "rule substrate-feature:\n    " + phon.Spell(x) + " => " + phon.Spell(sf) + " / " + env + "\n"
+			rule, err := tmpl.Compile(src)
+			if err != nil {
+				continue
+			}
+			n := 0
+			for i := 0; i < v.Lex.Len() && n < 3; i++ {
+				if _, ch := rule.Apply(v.Lex.At(lex.ConceptID(i)).Form, &v.Phonotax); ch {
+					n++
+				}
+			}
+			if n < 3 {
+				continue
+			}
+			return &history.Innovation{Kind: history.Sound, Template: "substrate " + phon.RenderFeatures(sf) + " (" + sb.Name + ")",
+				Family: "substrate", Src: src, Rule: rule, Stress: -1}
+		}
 	}
 	return nil
 }
