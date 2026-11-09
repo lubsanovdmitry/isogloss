@@ -82,8 +82,12 @@ func (s *Sim) propose() {
 			if _, ok := press.DriftTo(con.ID); ok {
 				rate *= driftBoost
 			}
-			if _, ok := press.ClashWith(con.ID); ok {
-				rate = max(rate, clashRatePer100k*int(s.Cfg.LexRate)/1000)
+			if cl, ok := press.ClashWith(con.ID); ok {
+				cr := clashRatePer100k
+				if cl.Cross {
+					cr = crossClashRatePer100k
+				}
+				rate = max(rate, cr*int(s.Cfg.LexRate)/1000)
 			}
 			if r.IntN(100000) >= rate {
 				continue
@@ -312,8 +316,13 @@ func (s *Sim) coin(r *rng.Stream, c *pop.Community, con lex.ConceptID, allowLoan
 		wShift = 400
 	}
 	why := ""
-	if w, ok := press.ClashWith(con); ok {
-		why = ", after it came to sound like '" + cs[w].Label + "'"
+	if cl, ok := press.ClashWith(con); ok {
+		why = ", after it came to sound like '" + cs[cl.Winner].Label + "'"
+		if len(cur.Form.Syll) <= 1 {
+			// A short word lost in homophony is replaced by something
+			// longer, as Chinese went disyllabic: compounds above all.
+			wComp *= 3
+		}
 	}
 	switch r.Weighted([]uint32{wShift, wComp, wRoot, wLoan}) {
 	case 0:

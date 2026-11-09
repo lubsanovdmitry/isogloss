@@ -188,3 +188,51 @@ func TestSubstrateFeatures(t *testing.T) {
 		t.Error("no substrate sound took hold")
 	}
 }
+
+// coreShares measures the reference varieties' core words: the share
+// borrowed from another language and the share sounding exactly like a
+// word of another root.
+func coreShares(s *Sim) (loans, homo, n int) {
+	for _, l := range s.LivingLanguages() {
+		v := s.CentreVariety(l)
+		forms := map[uint64][]lex.EtymID{}
+		for i := 0; i < v.Lex.Len(); i++ {
+			x := v.Lex.At(lex.ConceptID(i))
+			if !lex.Concepts()[i].Core() || x.Absent() {
+				continue
+			}
+			n++
+			if x.Stratum.Kind == lex.Borrowed {
+				loans++
+			}
+			forms[x.Hash] = append(forms[x.Hash], x.Etym)
+		}
+		for _, es := range forms { //lint:ordered counting
+			for _, e := range es {
+				if e != es[0] {
+					homo += len(es)
+					break
+				}
+			}
+		}
+	}
+	return
+}
+
+// TestCoreVocabularyStaysDistinct: basic vocabulary resists borrowing and
+// homophony. Measured 2026-11-09 (six seeds): at 2000 years 13% of core
+// words are loans (was 34%) and 20% are in homophone sets (was 28%).
+func TestCoreVocabularyStaysDistinct(t *testing.T) {
+	heavy(t)
+	var loans, homo, n int
+	for seed := uint64(1); seed <= 3; seed++ {
+		s := New(seed, DefaultConfig())
+		s.Run(80)
+		l, h, k := coreShares(s)
+		loans, homo, n = loans+l, homo+h, n+k
+	}
+	t.Logf("2000 years: core loans %d%%, homophones %d%%", loans*100/n, homo*100/n)
+	if loans*100 > n*22 || homo*100 > n*26 {
+		t.Errorf("core loans %d%%, homophones %d%%", loans*100/n, homo*100/n)
+	}
+}

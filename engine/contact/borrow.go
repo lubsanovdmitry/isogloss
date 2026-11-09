@@ -12,7 +12,7 @@ import (
 // words. Weights are relative, ×1000.
 var (
 	categoryWeight = map[string]uint32{"Person/Thing": 100, "Action/Process": 45, "Property": 30, "Number": 4, "Other": 6}
-	stabWeight     = [6]uint32{0, 4, 15, 40, 80, 100}
+	stabWeight     = [6]uint32{0, 1, 5, 25, 80, 100} // core meanings resist borrowing (WOLD: Leipzig-Jakarta items rarely borrowed)
 )
 
 var (

@@ -198,7 +198,7 @@ func RenderFeatures(f FeatureSet) string {
 		}
 	}
 	cur := t.symbols[best].F
-	out := t.symbols[best].IPA
+	base, marks := t.symbols[best].IPA, ""
 	for step := 0; step < 3 && bestD > 0; step++ {
 		pick := -1
 		for j, d := range t.diac {
@@ -211,8 +211,9 @@ func RenderFeatures(f FeatureSet) string {
 			break
 		}
 		cur = t.diac[pick].apply(cur)
-		out += t.diac[pick].mark
+		marks += t.diac[pick].mark
 	}
+	out := compose(base, marks)
 	t.cache.Store(f, out)
 	return out
 }
@@ -232,11 +233,11 @@ func (t *ipaTable) exact(f FeatureSet) (string, bool) {
 		cs = cs[:48]
 	}
 	best, bestN := "", 1<<30
-	var dfs func(cur FeatureSet, out string, n, from, depth int)
-	dfs = func(cur FeatureSet, out string, n, from, depth int) {
+	var dfs func(cur FeatureSet, base, marks string, n, from, depth int)
+	dfs = func(cur FeatureSet, base, marks string, n, from, depth int) {
 		if cur == f {
 			if n < bestN {
-				best, bestN = out, n
+				best, bestN = compose(base, marks), n
 			}
 			return
 		}
@@ -247,15 +248,35 @@ func (t *ipaTable) exact(f FeatureSet) (string, bool) {
 		for j := from; j < len(t.diac); j++ {
 			nf := t.diac[j].apply(cur)
 			if Distance(nf, f) < d0 {
-				dfs(nf, out+t.diac[j].mark, n+1, j+1, depth+1)
+				dfs(nf, base, marks+t.diac[j].mark, n+1, j+1, depth+1)
 			}
 		}
 	}
 	for _, c := range cs {
 		s := t.symbols[c.i]
-		dfs(s.F, s.IPA, utf8.RuneCountInString(s.IPA), 0, 0)
+		dfs(s.F, s.IPA, "", utf8.RuneCountInString(s.IPA), 0, 0)
 	}
 	return best, bestN < 1<<30
+}
+
+// compose adds diacritics to a base symbol so that combining ones (̃ ̈ ̆)
+// sit on the letter and spacing ones (ː ʰ ʲ) follow, including those the
+// base symbol already ends with: ɨ̃ː plus ̈ is ɨ̈̃ː, not ɨ̃ː̈.
+func compose(base, marks string) string {
+	rs := []rune(base)
+	cut := len(rs)
+	for cut > 1 && !unicode.Is(unicode.Mn, rs[cut-1]) && !isBase(rs[cut-1]) {
+		cut--
+	}
+	var comb, spacing []rune
+	for _, r := range marks {
+		if unicode.Is(unicode.Mn, r) {
+			comb = append(comb, r)
+		} else {
+			spacing = append(spacing, r)
+		}
+	}
+	return string(rs[:cut]) + string(comb) + string(rs[cut:]) + string(spacing)
 }
 
 // doubly spells a labial-velar consonant with no symbol of its own (a

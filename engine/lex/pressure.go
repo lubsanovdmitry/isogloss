@@ -5,9 +5,10 @@ import "slices"
 // Pressure summarises what pushes a variety to change its words. It is
 // computed once per variety (varieties are immutable once built).
 type Pressure struct {
-	// Clashes: homophones from different roots in the same semantic field.
-	// Each pair is listed once, with the less frequent word as Loser (the
-	// candidate for replacement, as with Gascon gat 'cat' / 'rooster').
+	// Clashes: homophones from different roots. Each word that sounds like
+	// a stronger one (more frequent, then more stable) is listed once as
+	// Loser, the candidate for replacement (Gascon gat 'cat' / 'rooster');
+	// Cross marks a clash across semantic fields, which hurts less.
 	Clashes []Clash
 	// Drifts: a word that has gained an extra sense competes with the
 	// concept's own word (Sense gets Word's word if the shift completes).
@@ -17,7 +18,10 @@ type Pressure struct {
 }
 
 // Clash is one pair of homophones.
-type Clash struct{ Loser, Winner ConceptID }
+type Clash struct {
+	Loser, Winner ConceptID
+	Cross         bool // different semantic fields
+}
 
 // Drift is one emerging sense.
 type Drift struct{ Word, Sense ConceptID }
@@ -60,40 +64,45 @@ func (v *Variety) Pressure() *Pressure {
 		}
 		return int(a.c) - int(b.c)
 	})
-	for k := 1; k < len(es); k++ {
-		a, b := es[k-1], es[k]
-		if a.h != b.h || a.field != b.field {
-			continue
+	// Each group of words that sound alike: the strongest word (most
+	// frequent, then most stable, then lowest ID) wins; every word of
+	// another root loses to it.
+	for lo := 0; lo < len(es); {
+		hi := lo + 1
+		for hi < len(es) && es[hi].h == es[lo].h {
+			hi++
 		}
-		// Compare with the group's first word, as each pair is listed once.
-		j := k - 1
-		for j > 0 && es[j-1].h == b.h && es[j-1].field == b.field {
-			j--
+		if hi-lo > 1 {
+			w := lo
+			for k := lo + 1; k < hi; k++ {
+				a, b := v.Lex.At(es[k].c), v.Lex.At(es[w].c)
+				if a.Freq < b.Freq || a.Freq == b.Freq && cs[es[k].c].Stab < cs[es[w].c].Stab {
+					w = k
+				}
+			}
+			win := v.Lex.At(es[w].c)
+			for k := lo; k < hi; k++ {
+				if k == w || v.Lex.At(es[k].c).Etym == win.Etym {
+					continue // the winner, or one word with two senses
+				}
+				p.Clashes = append(p.Clashes, Clash{Loser: es[k].c, Winner: es[w].c, Cross: es[k].field != es[w].field})
+			}
 		}
-		o, c := es[j].c, b.c
-		lo, lc := v.Lex.At(o), v.Lex.At(c)
-		if lo.Etym == lc.Etym {
-			continue // one word with two senses, not a clash
-		}
-		loser, winner := c, o
-		if lo.Freq > lc.Freq || lo.Freq == lc.Freq && cs[o].Stab > cs[c].Stab {
-			loser, winner = o, c
-		}
-		p.Clashes = append(p.Clashes, Clash{loser, winner})
+		lo = hi
 	}
 	slices.SortFunc(p.Clashes, func(a, b Clash) int { return int(a.Loser) - int(b.Loser) })
 	v.press = p
 	return p
 }
 
-// ClashWith returns the concept c's word clashes with, if c is the loser of
-// a homophone clash.
-func (p *Pressure) ClashWith(c ConceptID) (ConceptID, bool) {
+// ClashWith returns the clash in which concept c's word is the loser, if
+// any.
+func (p *Pressure) ClashWith(c ConceptID) (Clash, bool) {
 	i, ok := slices.BinarySearchFunc(p.Clashes, c, func(x Clash, c ConceptID) int { return int(x.Loser) - int(c) })
 	if !ok {
-		return 0, false
+		return Clash{}, false
 	}
-	return p.Clashes[i].Winner, true
+	return p.Clashes[i], true
 }
 
 // DriftTo returns a concept whose word is gaining sense c, if any.

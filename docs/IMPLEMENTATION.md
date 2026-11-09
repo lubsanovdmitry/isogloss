@@ -441,3 +441,24 @@ Settings panel offers rate multipliers (×0.25–×3) for sound change, word
 replacement, meaning shifts, borrowing, grammaticalization, analogy and
 word order; the language threshold; society on/off with polity, conquest,
 collapse and writing rates; map size, shape, rivers and substrates.
+
+**Core loans and homophony (2026-11-09).** A user's word list showed
+basic words borrowed everywhere and many unrelated words sounding alike.
+Measured on defaults at 2000 years: 34% of core words were loans, 58% of
+them a sister language's form of the inherited root (any cognate a
+sister pronounces differently was a loan candidate, ×2); 28% of core
+words sounded like a word of another root. Now: a sister's same-root
+form is a weak candidate (÷5, unless it splits a polysemous word), core
+meanings weigh less, and a picked loan is taken only with a chance by
+stability (5% for class 1 … 35% for class 5): core loans 13% at 2000
+years. Homophone clashes now count across semantic fields (800 per 100k,
+2500 within a field as before), and a clashing one-syllable word is
+replaced by a compound three times as often: homophony 18% → 14% at 1000
+years (12 seeds), 28% → 20% at 2000; retention 782 → 768‰. Stronger
+clash pressure removes more homophones but costs inherited words (11%
+at 724‰), because the model avoids homophony only by replacing words;
+real languages also block a merger in the words it would collide, which
+would need word traces built from full replays. A stronger penalty on
+merging sound changes and a minimal-word penalty were tried: they slowed
+divergence and did not reduce homophony, so they were dropped.
+Diacritics: combining marks now precede spacing ones (ɨ̈̃ː, not ɨ̃ː̈).

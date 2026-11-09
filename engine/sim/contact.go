@@ -21,6 +21,9 @@ const (
 	// clashRatePer100k: replacement proposals per 100 000 community-ticks
 	// for the less frequent word of a homophone pair.
 	clashRatePer100k = 2500
+	// crossClashRatePer100k: the same for homophones in different
+	// semantic fields, which context mostly tells apart.
+	crossClashRatePer100k = 800
 	// driftBoost multiplies the replacement rate of a concept another word
 	// is gaining as a sense (the competitor covers it).
 	driftBoost = 5
@@ -317,18 +320,34 @@ func (s *Sim) pickLoan(r *rng.Stream, v, d *lex.Variety) (lex.ConceptID, bool) {
 			continue
 		}
 		if ld.Etym == lv.Etym {
-			x *= 2 // a sister language's form of the same word: dialect borrowing is easiest
+			// A sister language's form of the same word: rarely worth
+			// taking (it means the same and sounds nearly alike), unless
+			// the native word has several senses and the sister's form
+			// lets one of them have a word of its own (shirt/skirt).
 			if senses[[2]uint64{uint64(lv.Etym), lv.Hash}] > 1 {
-				// The native word has several senses; the sister's form
-				// lets one of them have a word of its own (shirt/skirt).
-				x *= 3
+				x = x * 6 / 10
+			} else {
+				x /= 5
 			}
 		}
 		w[i] = x
 	}
 	i := r.Weighted(w)
-	return lex.ConceptID(i), i >= 0
+	if i < 0 {
+		return 0, false
+	}
+	// Stable meanings resist replacement by a loan outright, however few
+	// other words are left to borrow (WOLD: basic vocabulary is rarely
+	// borrowed even under heavy contact).
+	if c := lex.Concepts()[i]; c.Role != lex.RoleCulture && !r.Permille(loanAcceptPM[c.Stab]) {
+		return 0, false
+	}
+	return lex.ConceptID(i), true
 }
+
+// loanAcceptPM: chance (‰) that a loan picked for a meaning of stability
+// class 1..5 is taken.
+var loanAcceptPM = [6]uint32{0, 50, 100, 200, 250, 350}
 
 // takeWord builds the change by which community c takes over community
 // d's word for con: within one language the word spreads as it is

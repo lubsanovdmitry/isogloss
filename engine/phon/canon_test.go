@@ -75,3 +75,15 @@ func TestDoublyArticulatedFricative(t *testing.T) {
 		t.Errorf("spirantized ɡ͡b renders as %s, want ɣ͡β", got)
 	}
 }
+
+func TestCombiningMarksSitOnTheLetter(t *testing.T) {
+	f := mustSeg(t, "ɨ̈̃ː")
+	got := RenderFeatures(f)
+	rs := []rune(got)
+	if rs[len(rs)-1] != 'ː' {
+		t.Errorf("%s: length mark should come last", got)
+	}
+	if g := mustSeg(t, got); g != f {
+		t.Errorf("%s does not parse back", got)
+	}
+}
