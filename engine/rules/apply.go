@@ -367,6 +367,11 @@ func (r *Rule) Apply(w phon.Word, ph *phon.Phonotactics) (phon.Word, bool) {
 	if !r.MayApply(&w) {
 		return w, false
 	}
+	return r.ApplyChecked(w, ph)
+}
+
+// ApplyChecked is Apply for a word that MayApply has already passed.
+func (r *Rule) ApplyChecked(w phon.Word, ph *phon.Phonotactics) (phon.Word, bool) {
 	out := w
 	for _, c := range r.Clauses {
 		out, _ = c.Apply(out, ph)

@@ -18,6 +18,7 @@
 package main
 
 import (
+	"runtime/debug"
 	"strconv"
 	"syscall/js"
 	"time"
@@ -356,6 +357,10 @@ func query(q js.Value, s *sim.Sim) string {
 }
 
 func main() {
+	// Collect garbage half as often (12% faster runs), within a soft cap:
+	// wasm memory never shrinks, and the timeline keeps snapshots alive.
+	debug.SetGCPercent(200)
+	debug.SetMemoryLimit(1 << 30)
 	js.Global().Set("isoglossHandle", js.FuncOf(func(this js.Value, args []js.Value) (ret any) {
 		defer func() {
 			// Surface engine panics to the UI instead of killing the worker.

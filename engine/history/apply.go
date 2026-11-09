@@ -27,10 +27,15 @@ type Applier struct {
 // innovations live at once otherwise reserve gigabytes between sweeps.
 const maxMemo = 250_000
 
-type memoKey struct {
-	form uint64
-	ctx  uint64
-}
+// memoKey identifies a form (by its 64-bit hash, as everywhere in the
+// engine) in a context, mixed into one word: struct keys made hashing a
+// tenth of a run.
+type memoKey uint64
+
+func keyOf(form, ctx uint64) memoKey { return memoKey(form ^ (ctx+1)*0x9E3779B97F4A7C15) }
+
+// skipKey marks a form the rule cannot apply to at all (Rule.MayApply).
+func skipKey(form uint64) memoKey { return memoKey(form ^ 0xD6E8FEB86659FD93) }
 
 type memoVal struct {
 	w       phon.Word // raw rule output
@@ -320,18 +325,34 @@ func (a *Applier) applySound(v, nv *lex.Variety, in *Innovation, e lex.Entry) {
 	if !tracked {
 		memo = map[memoKey]*memoVal{} // scratch: not kept
 	}
+	// mayApply is Rule.MayApply, remembered per form while the change
+	// spreads (most words of most varieties are forms seen before).
+	mayApply := func(w *phon.Word, h uint64) bool {
+		if !tracked {
+			return in.Rule.MayApply(w)
+		}
+		nk := skipKey(h)
+		if _, ok := memo[nk]; ok {
+			return false
+		}
+		if in.Rule.MayApply(w) {
+			return true
+		}
+		a.remember(memo, nk, unchanged, true)
+		return false
+	}
 	for i := 0; i < v.Lex.Len(); i++ {
 		l := v.Lex.At(lex.ConceptID(i))
 		if !covers(e, l.Freq) {
 			continue
 		}
-		if !in.Rule.MayApply(&l.Form) {
+		if !mayApply(&l.Form, l.Hash) {
 			continue
 		}
-		k := memoKey{l.Hash, ctx}
+		k := keyOf(l.Hash, ctx)
 		mv, ok := memo[k]
 		if !ok {
-			w, ch := in.Rule.Apply(l.Form, &v.Phonotax)
+			w, ch := in.Rule.ApplyChecked(l.Form, &v.Phonotax)
 			mv = unchanged
 			if ch {
 				mv = &memoVal{w: w, changed: true}
@@ -360,14 +381,15 @@ func (a *Applier) applySound(v, nv *lex.Variety, in *Innovation, e lex.Entry) {
 		if p == nil || !covers(e, v.Lex.At(t.Concept).Freq) {
 			continue
 		}
-		for k, f := range p.Forms {
-			if !in.Rule.MayApply(&f) {
+		for k := range p.Forms {
+			f := &p.Forms[k]
+			if !mayApply(f, p.Hash[k]) {
 				continue
 			}
-			mk := memoKey{p.Hash[k], ctx}
+			mk := keyOf(p.Hash[k], ctx)
 			mv, ok := memo[mk]
 			if !ok {
-				w, ch := in.Rule.Apply(f, &v.Phonotax)
+				w, ch := in.Rule.ApplyChecked(*f, &v.Phonotax)
 				mv = unchanged
 				if ch {
 					mv = &memoVal{w: w, changed: true}

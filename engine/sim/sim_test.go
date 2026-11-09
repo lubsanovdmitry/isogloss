@@ -161,3 +161,13 @@ func runSeeds(first uint64, n int, ticks int) []Stats {
 	wg.Wait()
 	return stats
 }
+
+func BenchmarkEmpire40(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		s, err := NewScenario(7, DefaultConfig(), starter(b, "empire-collapse"))
+		if err != nil {
+			b.Fatal(err)
+		}
+		s.Run(40)
+	}
+}
