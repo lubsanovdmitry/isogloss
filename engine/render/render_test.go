@@ -179,6 +179,22 @@ func TestSuggestions(t *testing.T) {
 			t.Errorf("%s does not compile: %v", sg.Name, err)
 		}
 	}
+	fam := map[string]int{}
+	for _, sg := range sgs {
+		if fam[sg.Family]++; fam[sg.Family] > 2 {
+			t.Errorf("more than two %s suggestions", sg.Family)
+		}
+	}
+	other := s.SuggestSounds(h, 8, 1)
+	same := 0
+	for i := range min(len(sgs), len(other)) {
+		if sgs[i].Name == other[i].Name {
+			same++
+		}
+	}
+	if same == len(sgs) {
+		t.Error("other suggestions are the same list")
+	}
 	valid(t, "suggest", SuggestJSON(s, h, 8, 1))
 	if s.Digest() != d {
 		t.Error("suggesting changed the run")

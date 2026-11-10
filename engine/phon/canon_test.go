@@ -28,6 +28,8 @@ func TestCanonFixesIncoherentBundles(t *testing.T) {
 	}{
 		{"unrounded y is i", lookup("y").Set(Round, false), "i"},
 		{"raised a is tense e", lookup("a").Set(Low, false).Set(Front, true), "e"},
+		{"raised schwa is ɨ", lookup("ə").Set(High, true), "ɨ"},
+		{"raised ɛ stays lax", lookup("ɛ").Set(High, true), "ɪ"},
 		{"voiced glottal stop", lookup("ʔ").Set(Voice, true), "ʔ"},
 		{"h without spread glottis", lookup("h").Set(SpreadGlottis, false), "h"},
 		{"voiced ejective fricative", lookup("xʼ").Set(Voice, true), "xʼ"},
@@ -85,5 +87,40 @@ func TestCombiningMarksSitOnTheLetter(t *testing.T) {
 	}
 	if g := mustSeg(t, got); g != f {
 		t.Errorf("%s does not parse back", got)
+	}
+}
+
+// The consonant redundancy rules must describe the table: only a handful of
+// rare multiply-articulated symbols (bʷˠ, k͡pʷ, p̪) are coded otherwise.
+func TestConsonantDepsAgreeWithTable(t *testing.T) {
+	for _, s := range Symbols() {
+		if !s.F.Has(Consonantal) || s.F.Has(Syllabic) {
+			continue
+		}
+		if g := consonantDeps(s.F); g != s.F && Frequency(s.F) > 20 {
+			t.Errorf("%s (in %d‱ of inventories): %v → %v", s.IPA, Frequency(s.F), s.F, g)
+		}
+	}
+}
+
+func TestCanonDropsSecondaryArticulation(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		in   string
+		set  map[Feature]bool
+		want string
+	}{
+		{"delabialized kʷ", "kʷ", map[Feature]bool{Round: false, Labial: false}, "k"},
+		{"labiovelar to labial", "ɡʷ", map[Feature]bool{Dorsal: false, Round: false}, "b"},
+		{"plain tˤ", "tˤ", map[Feature]bool{RTR: false}, "t"},
+		{"depalatalized kʲ", "kʲ", map[Feature]bool{Front: false, Back: false}, "k"},
+	} {
+		f := mustSeg(t, c.in)
+		for k, v := range c.set {
+			f = f.Set(k, v)
+		}
+		if got := RenderFeatures(Canon(f)); got != c.want {
+			t.Errorf("%s: got %s, want %s", c.name, got, c.want)
+		}
 	}
 }

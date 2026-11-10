@@ -185,12 +185,47 @@ func (s FeatureSet) String() string {
 	return b.String()
 }
 
+// consonantDeps applies PHOIBLE's dependent-feature conventions to a
+// consonant: features of an articulator are specified only when the
+// articulator is used. A non-labial has no rounding or labiodentality; a
+// labial is unrounded and bilabial unless it says otherwise, and a labialized
+// dorsal or coronal (kʷ, ɣʷ, tʷ) leaves labiodentality unspecified; a non-dorsal has no tongue
+// body position; a non-coronal no tip features; and a consonant that is not
+// pharyngealized leaves the tongue root unspecified. So kʷ losing [+round
+// +lab] is k, and losing [+dors +round] is p; tˤ losing [+rtr] is t.
+func consonantDeps(f FeatureSet) FeatureSet {
+	if lab, ok := f.Get(Labial); ok && !lab {
+		f = f.Unset(Round).Unset(Labiodental)
+	} else if lab {
+		if _, ok := f.Get(Round); !ok {
+			f = f.Set(Round, false)
+		}
+		if f.Has(Round) && (f.Has(Dorsal) || f.Has(Coronal)) {
+			f = f.Unset(Labiodental)
+		} else if _, ok := f.Get(Labiodental); !ok && !f.Has(Round) {
+			f = f.Set(Labiodental, false)
+		}
+	}
+	if d, ok := f.Get(Dorsal); ok && !d {
+		f = f.Unset(High).Unset(Low).Unset(Front).Unset(Back)
+	}
+	if c, ok := f.Get(Coronal); ok && !c {
+		f = f.Unset(Anterior).Unset(Distributed).Unset(Strident)
+	}
+	if r, ok := f.Get(RTR); ok && !r && !f.Has(ATR) {
+		f = f.Unset(RTR).Unset(ATR)
+	}
+	return f
+}
+
 // Canon applies the redundancy rules of the segment table (PHOIBLE's
 // conventions) to a bundle a sound change produced, so that a change never
 // leaves a combination no symbol can show: an unrounded vowel is not
 // labial, a labial vowel is rounded, non-low vowels are tense except the
-// mid central one, a vowel is not both front and back (fronting wins), a
-// labialized consonant leaves labiodentality unspecified, ejectives are voiceless, implosives are voiced stops, and a placeless
+// mid central one (and a vowel takes the other tenseness when only that
+// is in the table), a vowel is not both front and back (fronting wins),
+// consonants specify only the features of the articulators they use
+// (consonantDeps), ejectives are voiceless, implosives are voiced stops, and a placeless
 // fricative (h, ɦ) is a non-consonantal glide with spread glottis (or,
 // glottalized, voiceless hˀ), and a glottal stop is voiceless. Bundles in the table are returned
 // unchanged.
@@ -220,10 +255,21 @@ func Canon(f FeatureSet) FeatureSet {
 			central := fok && !f.Has(Front) && !f.Has(Back) && !f.Has(High)
 			f = f.Set(Tense, !central)
 		}
+		// Tenseness is redundant once height or backness has moved: ə
+		// (lax by convention) raised is ɨ, not a lax high central vowel
+		// no inventory has. Keep the given value if the table knows it.
+		if _, ok := tbl().byFeat[f]; !ok {
+			if t, ok := f.Get(Tense); ok {
+				g := f.Set(Tense, !t)
+				if _, known := tbl().byFeat[g]; known {
+					return g
+				}
+			}
+		}
 		return f
 	}
-	if f.Has(Consonantal) && f.Has(Round) {
-		f = f.Unset(Labiodental) // labialized (kʷ, ɣʷ): never labiodental
+	if f.Has(Consonantal) {
+		f = consonantDeps(f)
 	}
 	if f.Has(Ejective) {
 		f = f.Set(Voice, false)

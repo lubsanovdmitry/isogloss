@@ -16,6 +16,12 @@ import (
 // Word-replacement proposals per 100 000 community-ticks, by stability class.
 var lexRatePer100k = [6]int{0, 8, 25, 60, 120, 240}
 
+// noChangeScore is the evaluation score of proposing nothing: a sound
+// change that scores far below it (one that would merge many words or
+// bring in rare sounds) seldom catches on. A sound change that does no harm
+// scores 1000.
+const noChangeScore = 400
+
 // seedLevel is the adoption level an innovation starts with at its origin.
 const seedLevelPermille = 200
 
@@ -109,18 +115,7 @@ func (s *Sim) pickSound(r *rng.Stream, c *pop.Community) *tmpl.Candidate {
 	v := c.Variety
 	inv := v.Inventory()
 
-	// Recently fired templates in this variety (decay factor d_recent).
-	recent := map[string]bool{}
-	for h, n := v.Hist, 0; h != nil && n < 3; h = h.Parent {
-		e := h.E
-		if e.Kind != lex.EntryInnov {
-			continue
-		}
-		if in := s.Reg.Get(e.Innov); in.Kind == history.Sound {
-			recent[in.Template] = true
-			n++
-		}
-	}
+	recent := s.recentSounds(v)
 	links := len(s.contacts[c.Hex])
 	small := c.Pop < 300 && links <= 2
 	large := c.Pop > 1000 && links >= 4
@@ -160,24 +155,49 @@ func (s *Sim) pickSound(r *rng.Stream, c *pop.Community) *tmpl.Candidate {
 		cands = append(cands, cand)
 		scores = append(scores, s.evaluate(cand, v, inv))
 	}
+	if len(cands) == 0 {
+		return nil
+	}
+	// Keeping things as they are is a candidate too, so that when every
+	// change on offer would wreck the lexicon (homophones, rare sounds)
+	// none usually catches on.
+	scores = append(scores, noChangeScore)
 	i := r.Weighted(scores)
-	if i < 0 {
+	if i < 0 || i == len(cands) {
 		return nil
 	}
 	return cands[i]
 }
 
+// recentSounds returns the templates of the last three sound changes in a
+// variety's history (decay factor d_recent).
+func (s *Sim) recentSounds(v *lex.Variety) map[string]bool {
+	recent := map[string]bool{}
+	for h, n := v.Hist, 0; h != nil && n < 3; h = h.Parent {
+		e := h.E
+		if e.Kind != lex.EntryInnov {
+			continue
+		}
+		if in := s.Reg.Get(e.Innov); in.Kind == history.Sound {
+			recent[in.Template] = true
+			n++
+		}
+	}
+	return recent
+}
+
 // evaluate scores a candidate (per-mille) on the variety's core vocabulary:
 // changes must affect enough words; mergers that create homophones are
 // dispreferred; typologically rare outputs are dispreferred; collapsing
-// small vowel systems is resisted and moving into a vacated slot (chain
-// shift) is boosted. Changes that leave no vowels or too few consonants
-// are rejected.
+// small vowel systems is resisted, moving into a vacated slot (chain
+// shift) is boosted and retiring rare sounds is rewarded. Changes that
+// leave no vowels or too few consonants are rejected.
 func (s *Sim) evaluate(cand *tmpl.Candidate, v *lex.Variety, inv []phon.FeatureSet) uint32 {
 	affected, coreN := 0, 0
 	oldForms := map[uint64]int{}
 	newForms := map[uint64]int{}
 	newSegs := map[phon.FeatureSet]bool{}
+	oldN, newN := map[phon.FeatureSet]int{}, map[phon.FeatureSet]int{}
 	for i := 0; i < v.Lex.Len(); i++ {
 		if !lex.Concepts()[i].Core() {
 			continue
@@ -190,6 +210,12 @@ func (s *Sim) evaluate(cand *tmpl.Candidate, v *lex.Variety, inv []phon.FeatureS
 		if ch {
 			affected++
 			h = lex.FormHash(w)
+			for _, sg := range l.Form.Segs {
+				oldN[sg.F]++
+			}
+			for _, sg := range w.Segs {
+				newN[sg.F]++
+			}
 		} else {
 			w = l.Form
 		}
@@ -254,6 +280,7 @@ func (s *Sim) evaluate(cand *tmpl.Candidate, v *lex.Variety, inv []phon.FeatureS
 			score = score * 3
 		}
 	}
+	score = score * uint64(1000+markednessGain(oldN, newN)) / 1000
 	if vowelsAfter < 2 || consAfter < 5 {
 		return 0
 	}
@@ -266,6 +293,25 @@ func (s *Sim) evaluate(cand *tmpl.Candidate, v *lex.Variety, inv []phon.FeatureS
 		}
 	}
 	return uint32(min(score, 1<<30))
+}
+
+// markednessGain (per-mille, 0..1000) rewards a change for retiring rare
+// sounds, the mirror of the typicality penalty on new ones: each sound
+// counts by the share of its occurrences (in the changed words) the change
+// removes, times its rarity — 0 for a sound in a fifth of the world's
+// inventories or more, near 1 for one almost none have. So β > v gains
+// about half, ʕ > ʔ almost all, and a > ə nothing.
+func markednessGain(oldN, newN map[phon.FeatureSet]int) int {
+	gain := 0
+	for f, n := range oldN { //lint:ordered summing is order-independent
+		lost := n - newN[f]
+		if lost <= 0 {
+			continue
+		}
+		rarity := 2000 - min(phon.Frequency(f), 2000) // per 2000
+		gain += lost * rarity / n / 2
+	}
+	return min(gain, 1000)
 }
 
 func cmpFeat(a, b phon.FeatureSet) int {

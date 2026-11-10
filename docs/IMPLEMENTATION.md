@@ -51,7 +51,8 @@ Decisions made while building M0–M2 that refine or depart from the spec.
 
 ## Calibration knobs (`sim.DefaultConfig`)
 
-Sound-change proposal rate 60‰ per community per generation; word-replacement
+Sound-change proposal rate 74‰ per community per generation (60‰ until
+2026-11-10, when doing nothing became a candidate; see Rare sounds below); word-replacement
 rates by stability class (8–240 per 100k community-generations, scaled ×0.45
 since the whole Swadesh list got curated stability classes, was ×0.52);
 innovations start at 0.2 adoption with a local growth rate in −0.25…0.75 and
@@ -521,3 +522,55 @@ back. Names drop a leading apostrophe (a romanized ʔ or ʕ): Insaan, not
 'Insaan. New starter: Out of Arabia (Arabic tribes conquer the farmers
 and hill people around them in years 50–150; Classical Arabic stays the
 written standard).
+
+## Rare sounds (2026-11-10)
+
+Runs from real proto-languages showed sinks and survivors: β ɸ θ ð and a
+lax ɨ̈ piled up, while kʷ, ʕ, tˤ and ejectives lasted ~95–100% of
+varieties through 1000 years, and the Suggest list was the template weight
+table in order. Causes and fixes:
+
+- **Phantom vowels.** Raising ə (lax by PHOIBLE's convention) kept it lax,
+  giving ɨ̈, which no inventory has; shortening wrote `[+short]`, which in
+  PHOIBLE is extra-short (ă ĭ). `phon.Canon` now flips tenseness when only
+  the other value is in the table, and shortening writes `[-long -short]`.
+  The phantoms used to keep words apart that now merge, which is part of
+  why homophony rose before recalibration.
+- **No exits.** Lenition fills β ð ɣ ɸ θ (weights 60/40/12) and nothing
+  emptied them. New templates: labial- and dental-fricative-shift (ɸ > f, h;
+  β > v, w; θ > t, s, f; ð > d, z, ∅), pharyngeal-shift (ʕ > ʔ, ħ > h, x),
+  guttural-loss (back fricatives lost, lengthening a preceding vowel),
+  delabialization, labiovelar-to-labial, depalatalization (centum or satem),
+  emphatic-loss, ejective-loss (> plain, voiced or pharyngealized),
+  guttural-lowering and -rounding (laryngeal colouring); ʔ-loss in all
+  positions. To let these be matrix rules, `phon.consonantDeps` applies
+  PHOIBLE's dependent-feature conventions (a non-labial has no rounding, a
+  non-dorsal no tongue-body position, a plain consonant no tongue-root
+  value), so kʷ minus [+round +lab] is k and minus [+dors +round] is p;
+  16 rare multiply-articulated table symbols are coded otherwise.
+- **No pressure.** The typicality penalty applied only on entry. `evaluate`
+  now also rewards retiring rare sounds: each sound counts by the share of
+  its occurrences removed times its rarity (0 at ≥ 20% of PHOIBLE
+  inventories), up to ×2 in all, so β > v gains ×1.5 and ʕ > ʔ almost ×2.
+- **Bad changes still won.** `pickSound` drew among its four candidates
+  even when all would merge many words. Doing nothing is now a candidate
+  scoring 400 (a harmless change scores 1000). That cut adopted sound
+  changes, so the proposal rate went from 60‰ to 74‰. Over seeds 100–115
+  this matches the old calibration: 23% of core words in homophone sets at
+  2000 years (HEAD 23%), 10 of 16 families split by year 800 (10), median
+  6 languages at 1000 years (5). Single 3- or 12-seed tests move by ±4
+  points from seed noise alone; the split gate in
+  `TestLoanStrataAndDoublets` is now 5 of 12 (these seeds gave 7 before, 5
+  after).
+- **Suggestions.** `SuggestSounds` now uses the simulation's recency
+  penalty, jitters scores by ±20% (±60% for "other suggestions") and shows
+  at most two per family.
+
+Over 18 runs (six proto-languages, three seeds, 1000 years): varieties
+keeping Latin kʷ 84% → 59%, Proto-Germanic θ 100% → 34%, Arabic θ 100% →
+59%, Arabic dˤ 86% → 44%, Proto-Semitic ʕ 94% → 66%, PIE ɣʷ (h₃) 100% →
+43%. ʔ stays (it is in 37% of inventories, so nothing presses on it), as
+does PIE χ (h₂), mostly word-initial or after consonants, where
+guttural-loss does not reach. Communities that gained β fell from 3856 to
+2457; ɨ̈ and the extra-short vowels are gone. The first suggestion now
+varies across 16 templates.

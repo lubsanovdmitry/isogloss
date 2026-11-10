@@ -73,7 +73,7 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{
 		World:          world.DefaultConfig,
-		SoundRate:      60,
+		SoundRate:      74,
 		LexRate:        450,
 		Candidates:     4,
 		ClusterEvery:   4,

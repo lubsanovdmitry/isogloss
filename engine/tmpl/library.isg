@@ -54,6 +54,29 @@ template velar-fricative-to-h weight=18 family=lenition
 template aspiration-loss weight=20 family=lenition
     [obs +sg] => [-sg]
 
+# Bilabial and dental fricatives (often products of spirantization) are
+# typologically rare and seldom last: ɸ > f, h (Japanese, Celtic); β > v
+# (the commonest, listed twice), w; θ > t, s, f; ð > d, z, nothing.
+template labial-fricative-shift weight=30 family=fricative
+slot P = [fric +lab -labdent] => [+labdent] | [fric +lab -labdent] => [+labdent] | [fric +lab -labdent -voice] => h | [fric +lab -labdent +voice] => w / V _ V
+    $P
+
+template dental-fricative-shift weight=25 family=fricative
+slot P = [fric +ant +dist -strid] => [-cont -delrel -dist] | [fric +ant +dist -strid] => [+strid -dist] | [fric +ant +dist -strid -voice] => f | [fric +ant +dist -strid +voice] => * / V _ V
+    $P
+
+# Gutturals: pharyngeals merge with glottals or are lost (Hebrew, Maltese,
+# Akkadian), back fricatives drop with compensatory lengthening (PIE
+# laryngeals, Greek and Turkish ɣ).
+template pharyngeal-shift weight=10 family=lenition
+slot P = [-syl +cons +low +voice] => ʔ | [-syl +cons +low -voice] => h | [-syl +cons +low -voice] => x | [-syl +cons +low] => * / V _ V
+    $P
+
+template guttural-loss weight=14 family=lenition
+slot G = [fric +dors -high] | [fric +dors +voice] | [-syl +cons +low]
+    [+syl -long] $G => [+long -short] * / _ C, _ #
+    $G => * / V _ V
+
 template glide-loss weight=10 family=lenition
 slot P = w => * / _ [+syl +round] | j => * / _ [+syl +front] | w => * / # _ | j => * / # _
     $P
@@ -111,7 +134,39 @@ template s-palatalization weight=12 family=palatalization
 template palatal-glide-absorption weight=12 family=palatalization
     j => * / [+delrel -cont] _, ʃ _
 
+# ---------------------------------------------------------------- secondary articulation
+# Labialized, palatalized, pharyngealized and ejective consonants are rarer
+# than their plain counterparts and are often lost: kʷ > k (or p, as in
+# Greek and Celtic), PIE ḱ > k (centum) or s (satem), Semitic emphatics > plain
+# (Akkadian, modern Hebrew) or ejectives > pharyngealized (Arabic).
+template delabialization weight=15 family=secondary
+slot P = [-syl +cons +round +dors] => [-round -lab] | [-syl +cons +round +dors] => [-round -lab] / _ [+syl +round], [+syl +round] _ | [-syl +cons +round +cor] => [-round -lab]
+    $P
+
+template labiovelar-to-labial weight=6 family=secondary
+    [-syl +cons +round +dors -cont] => [-dors -round]
+
+template depalatalization weight=10 family=secondary
+slot P = [-syl +cons -cor +dors +front] => [-front -back] | [stop -cor +dors +front -voice] => s | [stop -cor +dors +front +voice] => z
+    $P
+
+template emphatic-loss weight=10 family=secondary
+    [-syl +rtr] => [-rtr]
+
+template ejective-loss weight=8 family=secondary
+slot P = [-syl +eject] => [-eject -cg] | [-syl +eject] => [-eject -cg +voice] | [-syl +eject] => [-eject -cg +rtr -atr]
+    $P
+
 # ---------------------------------------------------------------- umlaut and harmony
+# Vowels are lowered beside uvulars and pharyngeals (Semitic, Quechua) and
+# coloured by them (the PIE laryngeals: *h₂e > a, *h₃e > o).
+template guttural-lowering weight=10 family=umlaut
+slot T = [+syl -high -low] => [+low -front -back -round -lab] | [+syl +high] => [-high]
+    $T / _ [-syl +cons +dors -high], [-syl +cons +dors -high] _
+
+template guttural-rounding weight=4 family=umlaut
+    [+syl -high -low] => [+back +round +lab -front] / _ [-syl +cons +dors +round +cont], [-syl +cons +dors +round +cont] _
+
 template i-umlaut weight=20 family=umlaut
 slot T = [+syl +back -low] | [+syl +back] | [+syl +low]
     $T => [-back +front] / _ C* [+syl +high +front -cons stress:0]
@@ -177,16 +232,16 @@ near A B 3
     $A => $B
 
 template length-loss weight=20 family=length
-    [+syl +long] => [-long +short]
+    [+syl +long] => [-long -short]
 
 template closed-syllable-shortening weight=12 family=length
-    [+syl +long] => [-long +short] / _ C C, _ C #
+    [+syl +long] => [-long -short] / _ C C, _ C #
 
 template open-syllable-lengthening weight=10 family=length
     [+syl stress:1 -long] => [+long -short] / _ C V
 
 template compensatory-lengthening weight=8 family=length
-slot L = h | s | n | r
+slot L = h | s | n | r | ʔ
     [+syl -long] $L => [+long -short] * / _ C
 
 # ---------------------------------------------------------------- erosion
@@ -220,8 +275,9 @@ template r-loss weight=6 family=erosion
 template l-vocalization weight=6 family=erosion
     l => w / V _ C, V _ #
 
-template ʔ-loss weight=12 family=erosion
-    ʔ => * / V _ V, _ C
+template ʔ-loss weight=18 family=erosion
+slot E = V _ V | _ C | _ # | # _
+    ʔ => * / $E
 
 # ---------------------------------------------------------------- clusters
 template medial-cluster-simplification weight=30 family=cluster
