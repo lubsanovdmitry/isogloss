@@ -13,7 +13,7 @@ Decisions made while building M0–M2 that refine or depart from the spec.
 | M2: irregular paradigms emerge | `TestIrregularParadigmsEmerge`: 8 of 8 seeds have stem allomorphy in a frequent (class ≤ 2) lexeme after 1000 years, and frequent paradigms are more often irregular than rare ones |
 | M2: 1000 years in the browser | 3.7–4.0 s in headless Chromium (seed 42; the machine was loaded), under the 5 s gate; ~1.6 s native on one core |
 | M3: loan strata and doublets in the comparative table | `TestLoanStrataAndDoublets` (seeds 1–12): every run's table has substrate words; of the 8 runs that split into languages by year 800, all 8 show loans from at least three donors and a loan doublet (a root present both natively and as a loan; 7 of 8 before court loans) |
-| M4: Empire collapse produces a continuum | `TestEmpireCollapseContinuum` (seeds 7–9): under the empire 72–100% of communities understand the capital's speech; 800 years after it falls in year 1000, 22–30% do, and the family forms a continuum of 7–10 languages |
+| M4: Empire collapse produces a continuum | `TestEmpireCollapseContinuum` (seeds 7–9; since 2026-11-10 seeds 7–18, two in three must hold together under the empire — about one empire in seven drifts apart under its own rule): under the empire 72–100% of communities understand the capital's speech; 800 years after it falls in year 1000, 22–30% do, and the family forms a continuum of 7–10 languages |
 | M4: 1000 years in the browser | ~3.7 s for the default run (seed 42); scenario runs that settle the whole map at year 0 are slower (Empire collapse ~14 s per 1000 years) |
 | Follow-ups (2026-11-09): 1000 years | default run ~4.0 s in headless Chromium (machine loaded), ~1.75 s native on one core; Empire collapse 5.2 s native (was 9.6) |
 | M3: 1000 years in the browser | ~3.3 s in headless Chromium (seed 42); ~1.5 s native on one core (M2's 1.8 s on the same machine) |
@@ -574,3 +574,32 @@ does PIE χ (h₂), mostly word-initial or after consonants, where
 guttural-loss does not reach. Communities that gained β fell from 3856 to
 2457; ɨ̈ and the extra-short vowels are gone. The first suggestion now
 varies across 16 templates.
+
+Follow-up the same day:
+
+- **Laryngeals.** guttural-loss also drops back fricatives after long
+  vowels (without lengthening) and word-initially before a vowel (*χeljo
+  > eljo); guttural-vocalization turns uvulars and pharyngeals into a
+  vowel between consonants and before a consonant word-initially (*pχtēr
+  > pater, *χnēr > anḗr). Its first draft also vocalized h and ɣ, which
+  every language keeps making (s > h, g > ɣ): that refilled clusters and
+  founder losses and failed the island-hopping gate, so they are out.
+- **Parser.** `rules.stripComment` read a '#' in a later environment of a
+  list (V _ C, # _ V) as a comment; it now starts each environment afresh.
+- **Regression test.** `TestRealProtosShedRareSounds` (six proto-languages,
+  two seeds, ~5 s) fails if more than 80% of rare proto sounds (< 10% of
+  PHOIBLE inventories) are still in use after 1000 years, if more than 3%
+  of new sounds are unattested in PHOIBLE, or if the six-best suggestion
+  lists draw on fewer than 20 templates. The previous commit (938fd46)
+  measures 87%, 5% and 16 and fails; now 67%, 1% and 24.
+- **Statistical gates.** Adding templates reshuffles every random draw, and
+  the three-seed gates swung by more than the effects they guard (homophony
+  20–30% between versions that 16 seeds rate 23% and 24%).
+  `TestCoreVocabularyStaysDistinct` now pools seeds 1–8 and
+  `TestEmpireCollapseContinuum` seeds 7–18, both in parallel; the previous
+  commit passes both.
+- **Still open.** PIE χ stays in ~99% of varieties: templates are drawn by
+  weight regardless of the inventory, so one aimed at χ comes up as rarely
+  in PIE as anywhere (guttural-loss was proposed twice in a whole PIE
+  run). Proto-Austronesian keeps 94% of its rare sounds (ɖ ʎ ɕ ʁ q): no
+  template targets retroflexes, palatal laterals or uvular stops.

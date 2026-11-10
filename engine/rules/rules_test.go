@@ -101,6 +101,8 @@ func TestSpecExamples(t *testing.T) {
 		{"rule v:\n    [-son -voice] => [+voice] / V _ + V\n", "kapi", "kapi"},
 		// A word boundary followed by a comment.
 		{"rule f:\n    [-son] => [-voice] / _ #   # final devoicing\n", "kad", "kat"},
+		// A later environment of a list may start at the word edge.
+		{"rule h:\n    h => * / V _ C, # _ V   # h lost\n", "hahta", "ata"},
 		// Optional element.
 		{"rule n:\n    a => e / _ (C) i\n", "ani", "eni"},
 		{"rule n:\n    a => e / _ (C) i\n", "ai", "ei"},

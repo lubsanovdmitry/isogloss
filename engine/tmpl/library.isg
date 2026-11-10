@@ -66,8 +66,12 @@ slot P = [fric +ant +dist -strid] => [-cont -delrel -dist] | [fric +ant +dist -s
     $P
 
 # Gutturals: pharyngeals merge with glottals or are lost (Hebrew, Maltese,
-# Akkadian), back fricatives drop with compensatory lengthening (PIE
-# laryngeals, Greek and Turkish ɣ).
+# Akkadian), back fricatives drop with compensatory lengthening after a short
+# vowel, and without it after a long one, between vowels or word-initially
+# (PIE laryngeals, Greek and Turkish ɣ); between consonants, and before one
+# word-initially, uvulars and pharyngeals become vowels (*pχtēr > pater,
+# *χnēr > Greek anḗr). Not h or ɣ: those are common everywhere (s > h, g > ɣ)
+# and turning them into vowels refills what clusters and founders lost.
 template pharyngeal-shift weight=10 family=lenition
 slot P = [-syl +cons +low +voice] => ʔ | [-syl +cons +low -voice] => h | [-syl +cons +low -voice] => x | [-syl +cons +low] => * / V _ V
     $P
@@ -75,7 +79,11 @@ slot P = [-syl +cons +low +voice] => ʔ | [-syl +cons +low -voice] => h | [-syl 
 template guttural-loss weight=14 family=lenition
 slot G = [fric +dors -high] | [fric +dors +voice] | [-syl +cons +low]
     [+syl -long] $G => [+long -short] * / _ C, _ #
-    $G => * / V _ V
+    $G => * / V _, # _ V
+
+template guttural-vocalization weight=10 family=lenition
+slot V = ə | a | i
+    [fric +dors -high] => $V / C _ C, # _ C
 
 template glide-loss weight=10 family=lenition
 slot P = w => * / _ [+syl +round] | j => * / _ [+syl +front] | w => * / # _ | j => * / # _

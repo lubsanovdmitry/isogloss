@@ -118,7 +118,8 @@ func (p *parser) predefine(name, src string) {
 // stripComment removes a '#' comment while keeping '#' word boundaries.
 // '#' starts a comment at the start of a line or anywhere before the
 // environment slash. Inside an environment, a '#' before the target marker
-// '_' is always a boundary (# _ V). After '_', a '#' is a boundary when it
+// '_' is always a boundary (# _ V), also in a later environment of a
+// list (V _ C, # _ V). After '_', a '#' is a boundary when it
 // ends the line or is followed by another '#'; a '#' followed by whitespace
 // and other text starts a comment (nothing can follow a word-final boundary).
 func stripComment(line string) string {
@@ -138,6 +139,10 @@ func stripComment(line string) string {
 		case '_':
 			if slash >= 0 {
 				underscore = true
+			}
+		case ',':
+			if slash >= 0 && depth == 0 {
+				underscore = false // a new environment begins
 			}
 		case '#':
 			if slash < 0 || strings.TrimSpace(line[:i]) == "" {

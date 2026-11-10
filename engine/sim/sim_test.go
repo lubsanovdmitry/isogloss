@@ -144,6 +144,21 @@ func TestSeedSweep(t *testing.T) {
 
 // runSeeds runs n seeds from first for ticks each, at most GOMAXPROCS at a
 // time (one at a time under wasm, whose memory is small), and summarises them.
+// eachSeed calls f for seeds first … first+n-1, in parallel.
+func eachSeed(first uint64, n int, f func(seed uint64)) {
+	sem := make(chan struct{}, runtime.GOMAXPROCS(0))
+	var wg sync.WaitGroup
+	for i := range n {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(seed uint64) {
+			defer func() { <-sem; wg.Done() }()
+			f(seed)
+		}(first + uint64(i))
+	}
+	wg.Wait()
+}
+
 func runSeeds(first uint64, n int, ticks int) []Stats {
 	stats := make([]Stats, n)
 	sem := make(chan struct{}, runtime.GOMAXPROCS(0))
