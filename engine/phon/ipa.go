@@ -152,6 +152,12 @@ func betterSymbol(a, b Symbol) bool {
 // with exactly these features (0 for bundles not in the table).
 func Frequency(f FeatureSet) int { return tbl().freqFeat[f] }
 
+// Rarity (per-mille) is how unusual a sound is among the world's
+// inventories: 0 for one in a fifth of PHOIBLE's inventories or more,
+// rising to 1000 for one none has. β (in 10%) is about 500, ʕ (2%) about
+// 900.
+func Rarity(f FeatureSet) int { return (2000 - min(Frequency(f), 2000)) / 2 }
+
 // Symbols returns the IPA table (read-only).
 func Symbols() []Symbol { return tbl().symbols }
 

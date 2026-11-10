@@ -74,8 +74,10 @@ func TestRealProtosShedRareSounds(t *testing.T) {
 	}
 	t.Logf("all: rare sounds kept %d%%, new sounds unattested %d%%; %d templates suggested, the commonest (%s) in %d of %d lists",
 		pct(kept, marked), pct(odd, gained), len(inLists), most, common, len(runs))
-	if pct(kept, marked) > 80 {
-		t.Errorf("%d%% of rare proto sounds still in use after 1000 years, want ≤ 80%%", pct(kept, marked))
+	// 87% before the drain templates, 67–69% with them, 52–54% once
+	// proposals aimed at a language's rare sounds (Template.Pressure).
+	if pct(kept, marked) > 62 {
+		t.Errorf("%d%% of rare proto sounds still in use after 1000 years, want ≤ 62%%", pct(kept, marked))
 	}
 	if pct(odd, gained) > 3 {
 		t.Errorf("%d%% of new sounds are in no PHOIBLE inventory, want ≤ 3%%", pct(odd, gained))

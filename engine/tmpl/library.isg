@@ -58,7 +58,7 @@ template aspiration-loss weight=20 family=lenition
 # typologically rare and seldom last: ɸ > f, h (Japanese, Celtic); β > v
 # (the commonest, listed twice), w; θ > t, s, f; ð > d, z, nothing.
 template labial-fricative-shift weight=30 family=fricative
-slot P = [fric +lab -labdent] => [+labdent] | [fric +lab -labdent] => [+labdent] | [fric +lab -labdent -voice] => h | [fric +lab -labdent +voice] => w / V _ V
+slot P = [fric +cons +lab -labdent] => [+labdent] | [fric +cons +lab -labdent] => [+labdent] | [fric +cons +lab -labdent -voice] => h | [fric +cons +lab -labdent +voice] => w / V _ V
     $P
 
 template dental-fricative-shift weight=25 family=fricative
@@ -155,14 +155,37 @@ template labiovelar-to-labial weight=6 family=secondary
     [-syl +cons +round +dors -cont] => [-dors -round]
 
 template depalatalization weight=10 family=secondary
-slot P = [-syl +cons -cor +dors +front] => [-front -back] | [stop -cor +dors +front -voice] => s | [stop -cor +dors +front +voice] => z
+slot P = [-syl +cons -cor -lab +dors +front] => [-front -back] | [stop -cor +dors +front -voice] => s | [stop -cor +dors +front +voice] => z | [-syl +cons +lab +dors +front] => [-dors] | [-syl +cons +cor +ant +dors +front] => [-dors]
     $P
 
 template emphatic-loss weight=10 family=secondary
     [-syl +rtr] => [-rtr]
 
 template ejective-loss weight=8 family=secondary
-slot P = [-syl +eject] => [-eject -cg] | [-syl +eject] => [-eject -cg +voice] | [-syl +eject] => [-eject -cg +rtr -atr]
+slot P = [-syl +eject] => [-eject -cg] | [-syl +eject] => [-eject -cg +voice] | [-syl +eject +cor -delrel] => [-eject -cg +rtr -atr]
+    $P
+
+# Places few languages keep apart: retroflexes merge with alveolars (ɖ > d;
+# not the rhotic ɻ, whose alveolar counterpart is ɹ, a different manner),
+# palatals turn into postalveolars, glides or plain laterals (ʎ > l, j; ɟ >
+# d͡ʒ; ɕ > s, ʃ), uvulars into velars, glottals or r (q > k, ʔ; χ > x; ʁ >
+# ɣ, r), as across the Austronesian daughters; lateral fricatives become
+# sibilants or l (Semitic ś > Hebrew s, Arabic ʃ).
+template lateral-fricative-shift weight=8 family=place
+slot P = [fric +lat] => [-lat +strid] | [fric +lat] => [-lat +strid -ant +dist] | [fric +lat +voice] => l | [fric +lat -voice] => l
+    $P
+
+template retroflex-loss weight=10 family=place
+    [-syl +cor -ant -dist -approx] => [+ant]
+    [-syl +cor -ant -dist +lat] => [+ant]
+    [-syl +cor -ant -dist +tap] => [+ant]
+
+template palatal-shift weight=12 family=place
+slot P = [-syl +lat +dors] => [-dors +ant -dist] | [-syl +lat +dors] => j | [stop +cor -ant +dors +voice] => d͡ʒ | [stop +cor -ant +dors -voice] => t͡ʃ | [stop +cor -ant +dors] => j | [-syl -son +cor +dors +strid] => [-dors -dist] | [-syl -son +cor +dors +strid] => [-dors -ant]
+    $P
+
+template uvular-fronting weight=10 family=place
+slot P = [-syl -son +dors -high -low +back] => [+high -back] | [stop +dors -high -low +back] => ʔ | [fric +dors -high -low +back +voice] => r
     $P
 
 # ---------------------------------------------------------------- umlaut and harmony

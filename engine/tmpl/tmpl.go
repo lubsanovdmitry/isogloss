@@ -6,6 +6,7 @@ package tmpl
 
 import (
 	_ "embed"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -41,6 +42,31 @@ type Template struct {
 	Near    []near
 	Body    string
 	Index   int
+	aims    []aim     // every distinct target element (with its replacement) over all slot fillings
+	fills   [][][]int // per distinct filling, per clause, the aims it targets
+}
+
+// aim is one target element of a template and what replaces it.
+type aim struct {
+	pat *rules.SegPat
+	out rules.Out // ODelete for a deletion
+}
+
+// rarityAfter is the rarity of what f becomes.
+func (a aim) rarityAfter(f phon.FeatureSet) int {
+	switch a.out.Kind {
+	case rules.ODelete:
+		return 0
+	case rules.OMatrix:
+		return phon.Rarity(phon.Canon(f.Apply(a.out.Delta)))
+	case rules.OLit:
+		r := 0
+		for _, sg := range a.out.Lit {
+			r = max(r, phon.Rarity(sg.F))
+		}
+		return r
+	}
+	return phon.Rarity(f) // a correspondence list: unknown, no gain
 }
 
 // Slot is a named placeholder with alternatives.
@@ -67,6 +93,173 @@ func load() {
 		return
 	}
 	lib, loadErr = parseLibrary(librarySrc)
+	if loadErr != nil {
+		return
+	}
+	for _, t := range lib { // prelude is parsed; Library would deadlock here
+		t.findAims()
+	}
+}
+
+// maxFillings bounds the slot fillings findAims tries per template.
+const maxFillings = 512
+
+// findAims collects the target elements of every filling of the
+// template's slots: the distinct elements with their replacements in
+// aims, and for each distinct filling the aims of each clause. An @seg slot
+// is filled with its matrix, which stands for every segment it would expand
+// to; a filling that does not parse that way (an @seg inside a matrix) is
+// skipped, as are insertions, which target nothing.
+func (t *Template) findAims() {
+	index := map[string]int{}
+	seenFill := map[string]bool{}
+	idx := make([]int, len(t.Slots))
+	for n := 0; n < maxFillings; n++ {
+		body := t.Body
+		for _, name := range t.slotNamesLongestFirst() {
+			i := t.slotIndex(name)
+			alt := t.Slots[i].Alts[idx[i]]
+			if strings.HasPrefix(alt, "@seg[") {
+				alt = alt[len("@seg"):]
+			}
+			body = strings.ReplaceAll(body, "$"+name, alt)
+		}
+		if f, err := rules.ParseWith("rule "+t.Name+":\n"+body, prelude); err == nil {
+			var fill [][]int
+			for _, c := range f.Rules[0].Clauses {
+				var cl []int
+				for k, e := range c.Target {
+					if e.Kind != rules.ESeg {
+						continue
+					}
+					a := aim{pat: e.Seg, out: replacement(c, k)}
+					key := e.Seg.Src + " => " + a.out.Src + strconv.Itoa(int(a.out.Kind))
+					j, ok := index[key]
+					if !ok {
+						j = len(t.aims)
+						index[key] = j
+						t.aims = append(t.aims, a)
+					}
+					cl = append(cl, j)
+				}
+				if len(cl) > 0 {
+					fill = append(fill, cl)
+				}
+			}
+			var kb strings.Builder
+			for _, cl := range fill {
+				for _, j := range cl {
+					kb.WriteString(strconv.Itoa(j))
+					kb.WriteByte(' ')
+				}
+				kb.WriteByte('|')
+			}
+			if key := kb.String(); len(fill) > 0 && !seenFill[key] {
+				seenFill[key] = true
+				t.fills = append(t.fills, fill)
+			}
+		}
+		// Next filling (odometer order); stop after the last.
+		k := 0
+		for ; k < len(idx); k++ {
+			idx[k]++
+			if idx[k] < len(t.Slots[k].Alts) {
+				break
+			}
+			idx[k] = 0
+		}
+		if k == len(idx) {
+			break
+		}
+	}
+}
+
+// replacement is what replaces target element k of clause c. A clause
+// whose replacement differs in length from its target is a single deletion
+// or a literal sequence (see rules.Clause); each element then becomes the
+// whole sequence.
+func replacement(c *rules.Clause, k int) rules.Out {
+	if len(c.Repl) == len(c.Target) {
+		return c.Repl[k]
+	}
+	if len(c.Repl) == 1 && c.Repl[0].Kind == rules.ODelete {
+		return c.Repl[0]
+	}
+	lit := rules.Out{Kind: rules.OLit}
+	for _, o := range c.Repl {
+		lit.Lit = append(lit.Lit, o.Lit...)
+		lit.Src += o.Src
+	}
+	return lit
+}
+
+func (t *Template) slotIndex(name string) int {
+	for i, s := range t.Slots {
+		if s.Name == name {
+			return i
+		}
+	}
+	return -1
+}
+
+// slotNamesLongestFirst lists slot names so that $AB is substituted before
+// $A.
+func (t *Template) slotNamesLongestFirst() []string {
+	names := make([]string, 0, len(t.Slots))
+	for _, s := range t.Slots {
+		names = append(names, s.Name)
+	}
+	slices.SortStableFunc(names, func(a, b string) int { return len(b) - len(a) })
+	return names
+}
+
+// Pressure (per-mille) is how much the template's change would make an
+// inventory less unusual (rarity[i] is inv[i]'s): a target element scores
+// the mean, over the inventory sounds it matches, of the rarity it removes
+// (the sound's rarity less that of what it becomes; nothing if that is
+// rarer); a clause scores its best element if all its elements match
+// something; a filling of the slots scores its best clause; and the
+// template scores the mean over the fillings with a clause that applies,
+// which is what a random instantiation aims at. Deleting χ scores χ's
+// rarity, kʷ > k most of kʷ's, and kʷ > ɡʷ or voicing stops nothing.
+func (t *Template) Pressure(inv []phon.FeatureSet, rarity []int) int {
+	score := make([]int, len(t.aims)) // -1: matches nothing
+	for j, a := range t.aims {
+		sum, n := 0, 0
+		for i, f := range inv {
+			if a.pat.MatchFeatures(f) {
+				sum += max(0, rarity[i]-a.rarityAfter(f))
+				n++
+			}
+		}
+		score[j] = -1
+		if n > 0 {
+			score[j] = sum / n
+		}
+	}
+	total, n := 0, 0
+	for _, fill := range t.fills {
+		best := -1
+		for _, cl := range fill {
+			cs := 0
+			for _, j := range cl {
+				if score[j] < 0 {
+					cs = -1
+					break
+				}
+				cs = max(cs, score[j])
+			}
+			best = max(best, cs)
+		}
+		if best >= 0 {
+			total += best
+			n++
+		}
+	}
+	if n == 0 {
+		return 0
+	}
+	return total / n
 }
 
 // Library returns all templates.
@@ -237,18 +430,7 @@ func (t *Template) Instantiate(r *rng.Stream, inv []phon.FeatureSet) (*Candidate
 		}
 		body := t.Body
 		// Substitute longer names first so $AB is not read as $A + B.
-		names := make([]string, 0, len(t.Slots))
-		for _, s := range t.Slots {
-			names = append(names, s.Name)
-		}
-		for i := range names {
-			for j := i + 1; j < len(names); j++ {
-				if len(names[j]) > len(names[i]) {
-					names[i], names[j] = names[j], names[i]
-				}
-			}
-		}
-		for _, n := range names {
+		for _, n := range t.slotNamesLongestFirst() {
 			body = strings.ReplaceAll(body, "$"+n, vals[n])
 		}
 		header := "rule " + t.Name

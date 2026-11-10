@@ -124,9 +124,11 @@ func (s *Sim) pickSound(r *rng.Stream, c *pop.Community) *tmpl.Candidate {
 		mean += uint64(t.Weight)
 	}
 	mean /= uint64(len(lib))
+	rar := rarities(inv)
 	w := make([]uint32, len(lib))
 	for i, t := range lib {
 		x := uint64(t.Weight) * 1000
+		x = x * aimFactor(t, inv, rar) / 1000
 		if small { // flatten toward the mean: rare changes become likelier
 			xi, m := int64(x), int64(mean*1000)
 			xi += (m - xi) * int64(s.Cfg.SmallBias) / 2000
@@ -167,6 +169,28 @@ func (s *Sim) pickSound(r *rng.Stream, c *pop.Community) *tmpl.Candidate {
 		return nil
 	}
 	return cands[i]
+}
+
+// aimBoost scales how much likelier a change aimed at a language's rare
+// sounds is to be proposed: a template's weight is multiplied by 1 +
+// aimBoost × its pressure (0..1), so one that would delete a sound almost
+// no language has comes up aimBoost+1 times as often. Without it the
+// templates for rare sounds came up as seldom where those sounds were as
+// anywhere else, and PIE kept its χ.
+const aimBoost = 3
+
+// aimFactor (per-mille) is the template's weight multiplier for an
+// inventory with the given rarities.
+func aimFactor(t *tmpl.Template, inv []phon.FeatureSet, rar []int) uint64 {
+	return uint64(1000 + aimBoost*t.Pressure(inv, rar))
+}
+
+func rarities(inv []phon.FeatureSet) []int {
+	rar := make([]int, len(inv))
+	for i, f := range inv {
+		rar[i] = phon.Rarity(f)
+	}
+	return rar
 }
 
 // recentSounds returns the templates of the last three sound changes in a
@@ -308,8 +332,7 @@ func markednessGain(oldN, newN map[phon.FeatureSet]int) int {
 		if lost <= 0 {
 			continue
 		}
-		rarity := 2000 - min(phon.Frequency(f), 2000) // per 2000
-		gain += lost * rarity / n / 2
+		gain += lost * phon.Rarity(f) / n
 	}
 	return min(gain, 1000)
 }

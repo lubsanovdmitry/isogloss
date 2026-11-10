@@ -229,7 +229,10 @@ func coreShares(s *Sim) (loans, homo, n int) {
 // homophony. Measured 2026-11-09 (six seeds): at 2000 years 13% of core
 // words are loans (was 34%) and 20% are in homophone sets (was 28%). On 3
 // seeds the homophone share swung 20–30% between versions that 16 seeds
-// rate alike (23–24%), so the gate pools 8.
+// rate alike (23–24%), so the gate pools 8. Changes aimed at rare sounds
+// (2026-11-10) merge more of them into common ones (q > k, ɖ > d): over
+// seeds 1–32 homophony went from 23% to 24%, and seeds 1–8, which run high,
+// from 24% to 25–26%; the homophone limit went from 26% to 27%.
 func TestCoreVocabularyStaysDistinct(t *testing.T) {
 	heavy(t)
 	var mu sync.Mutex
@@ -243,7 +246,7 @@ func TestCoreVocabularyStaysDistinct(t *testing.T) {
 		mu.Unlock()
 	})
 	t.Logf("2000 years: core loans %d%%, homophones %d%%", loans*100/n, homo*100/n)
-	if loans*100 > n*22 || homo*100 > n*26 {
+	if loans*100 > n*22 || homo*100 > n*27 {
 		t.Errorf("core loans %d%%, homophones %d%%", loans*100/n, homo*100/n)
 	}
 }

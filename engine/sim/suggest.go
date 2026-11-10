@@ -28,8 +28,9 @@ type WordChange struct {
 // SuggestSounds offers up to n sound changes for the community at hex,
 // best first: every template is filled in a few times from its inventory
 // and scored as the simulation scores its own proposals (enough words
-// affected, few homophones, typical results, rare sounds retired; the
-// templates of its last few sound changes count less). Scores are
+// affected, few homophones, typical results, rare sounds retired, aimed at
+// the community's rare sounds; the templates of its last few sound changes
+// count less). Scores are
 // jittered — by up to a fifth for salt 0, by up to three fifths for
 // "other suggestions" — so the list is not the weight table in order, and
 // no family takes more than two places. salt also varies the fillings. It
@@ -43,6 +44,7 @@ func (s *Sim) SuggestSounds(hex int32, n int, salt uint64) []Suggestion {
 	var out []Suggestion
 	seen := map[string]bool{}
 	recent := s.recentSounds(v)
+	rar := rarities(inv)
 	spread := uint64(200)
 	if salt > 0 {
 		spread = 600
@@ -56,7 +58,7 @@ func (s *Sim) SuggestSounds(hex int32, n int, salt uint64) []Suggestion {
 				continue
 			}
 			seen[cand.Src] = true
-			score := uint64(s.evaluate(cand, v, inv)) * uint64(t.Weight) / 100
+			score := uint64(s.evaluate(cand, v, inv)) * uint64(t.Weight) / 100 * aimFactor(t, inv, rar) / 1000
 			if score == 0 {
 				continue
 			}
